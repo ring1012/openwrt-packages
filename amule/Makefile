@@ -8,9 +8,9 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=aMule
-PKG_VERSION:=2.3.2
-PKG_RELEASE:=4
-PKG_REV=ae8e867
+PKG_VERSION:=2.3.3
+PKG_RELEASE:=27
+PKG_REV=4b87b20
 
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-r$(PKG_REV).tar.bz2
@@ -18,6 +18,7 @@ PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_VERSION:=$(PKG_REV)
 PKG_SOURCE_URL:=https://github.com/amule-project/amule.git
+PKG_MIRROR_HASH:=skip
 
 PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
 PKG_BUILD_DEPENDS:=libgd libcryptopp
@@ -39,6 +40,19 @@ define Package/amule
   URL:=http://www.amule.org/
   DEPENDS:=+libpng +libpthread +libncurses +libreadline +libwxbase +libupnp +libbfd \
 	$(ICONV_DEPENDS) $(INTL_DEPENDS) +!AMULE_CRYPTOPP_STATIC_LINKING:libcryptopp
+endef
+
+define Download/AmuleWebUI
+  URL:=https://github.com/MatteoRagni/AmuleWebUI-Reloaded/archive
+  URL_FILE:=master.zip
+  FILE:=AmuleWebUI.zip
+  HASH:=skip
+endef
+
+define Build/Prepare
+	$(call Build/Prepare/Default)
+	unzip $(DL_DIR)/AmuleWebUI.zip -d $(PKG_BUILD_DIR)
+	
 endef
 
 CONFIGURE_ARGS+= \
@@ -74,8 +88,7 @@ CONFIGURE_ARGS+= \
 	--without-x \
 	--disable-debug 
 
-TARGET_LDFLAGS += -liconv 
-
+TARGET_LDFLAGS += $(if $(ICONV_FULL),-liconv)
 
 define Build/Configure
 	cd $(PKG_BUILD_DIR) && sh ./autogen.sh
@@ -103,7 +116,9 @@ define Package/amule/install
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/amule{cmd,d} $(1)/usr/bin/
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/src/webserver/src/amuleweb $(1)/usr/bin/
 	$(CP) $(PKG_BUILD_DIR)/src/webserver/default $(1)/usr/share/amule/webserver
+	$(CP) $(PKG_BUILD_DIR)/AmuleWebUI-Reloaded-master $(1)/usr/share/amule-dlp/webserver/AmuleWebUI-Reloaded
 	
 endef
 
+$(eval $(call Download,AmuleWebUI))
 $(eval $(call BuildPackage,amule))

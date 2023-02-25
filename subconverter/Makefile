@@ -1,60 +1,53 @@
+# SPDX-License-Identifier: GPL-3.0-only
 #
-# Copyright (C) 2019 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
+# Copyright (C) 2021 ImmortalWrt.org
+
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=subconverter
-PKG_VERSION:=0.6.4
-PKG_RELEASE:=1
+PKG_RELEASE:=44
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/tindy2013/subconverter.git
-PKG_SOURCE_VERSION:=ab4d7543cec46cd9e45680f3b43d82de16f38a3d
-PKG_MIRROR_HASH:=c5dc3c224d9229df09428a28a1306bba28790b328f8d644ae41e929bee58426c
-PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+PKG_SOURCE_DATE:=2022-08-31
+PKG_SOURCE_VERSION:=7703d551bd873cbc0e15fd2d7fb175528dbe012e
+PKG_MIRROR_HASH:=skip
+PKG_VERSION:=0.7.2
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
-
-PKG_LICENSE:=GPLv3
+PKG_LICENSE:=GPL-3.0
 PKG_LICENSE_FILES:=LICENSE
-PKG_MAINTAINER:=[CTCGFW]Project OpenWrt
+PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
 
-PKG_USE_MIPS16:=0
+PKG_BUILD_DEPENDS:=jpcre2 rapidjson toml11
 PKG_BUILD_PARALLEL:=1
-PKG_BUILD_DEPENDS:=duktape jpcre2 rapidjson
 
 include $(INCLUDE_DIR)/package.mk
 include $(INCLUDE_DIR)/cmake.mk
 
-define Package/$(PKG_NAME)
-	SECTION:=utils
-	CATEGORY:=Utilities
-	TITLE:=Utility to convert between various subscription format.
-	URL:=https://github.com/tindy2013/subconverter
-	DEPENDS:=+libpthread +libstdcpp +libevent2 +libyaml-cpp +libpcre2 +libcurl +zlib
+define Package/subconverter
+  SECTION:=utils
+  CATEGORY:=Utilities
+  TITLE:=Utility to convert between various proxy subscription format
+  URL:=https://github.com/tindy2013/subconverter
+  DEPENDS:=+libatomic +libcron +libcurl +libevent2 +libpcre2 \
+    +libquickjs +libstdcpp +libyaml-cpp
 endef
 
-define Package/$(PKG_NAME)/description
-	Utility to convert between various subscription format.
-endef
+# mips(el) & glibc require it
+CMAKE_OPTIONS+= -DCMAKE_EXE_LINKER_FLAGS="-latomic"
 
-TARGET_CXXFLAGS := $(FPIC) $(filter-out -O%,$(TARGET_CXXFLAGS)) -O3
+TARGET_CXXFLAGS := $(filter-out -O%,$(TARGET_CXXFLAGS)) -O3
 TARGET_CXXFLAGS += -Wall -Wextra -ffunction-sections -fdata-sections -flto
 TARGET_LDFLAGS += -Wl,--gc-sections -flto
 
-CMAKE_OPTIONS += -DCMAKE_BUILD_TYPE=Release
-
-define Package/$(PKG_NAME)/install
+define Package/subconverter/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(PKG_BUILD_DIR)/subconverter $(1)/usr/bin/subconverter
 	$(INSTALL_DIR) $(1)/etc/subconverter
 	$(CP) $(PKG_BUILD_DIR)/base/* $(1)/etc/subconverter/
+
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/subconverter.init $(1)/etc/init.d/subconverter
 endef
 
-$(eval $(call BuildPackage,$(PKG_NAME)))
+$(eval $(call BuildPackage,subconverter))

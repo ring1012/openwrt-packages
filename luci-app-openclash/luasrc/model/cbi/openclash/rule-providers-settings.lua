@@ -11,23 +11,17 @@ local uci = require "luci.model.uci".cursor()
 
 m = Map(openclash,  translate("Rule Providers and Groups"))
 m.pageaction = false
-m.description=translate("注意事项：<br/>游戏代理为测试功能，不保证规则可用性 \
-<br/>准备步骤：\
-<br/>1、在《服务器与策略组管理》页面创建您准备使用的策略组和节点，并应用配置（节点添加时必须选择要加入的策略组），策略组类型建议:FallBack，游戏节点必须支持UDP \
-<br/>2、点击《管理第三方游戏规则》或者《管理第三方规则集》按钮进入规则列表下载您要使用的规则 \
-<br/>3、在此页面设置您已下载的规则的对应配置文件、策略组并保存设置 \
-<br/> \
-<br/>在普通模式下使用（仅游戏规则）： \
-<br/>1、在《全局设置》-《模式设置》-《运行模式》中选择普通模式并启用UDP流量代理，然后重新启动 \
-<br/> \
-<br/>在TUN模式下使用： \
-<br/>1、在全局设置-版本更新标签先下载、安装对应模式内核 \
-<br/>2、在《全局设置》-《模式设置》-《运行模式》中选择混合模式、TUN模式或者游戏模式并重新启动 \
-<br/> \
-<br/>本页设置时如策略组为空，请先到《服务器与策略组管理》页面进行添加 \
-<br/> \
-<br/>规则集使用介绍：https://lancellc.gitbook.io/clash/clash-config-file/rule-provider")
-
+m.description=translate("Attention:")..
+"<br/>"..translate("The game proxy is a test function and does not guarantee the availability of rules")..
+"<br/>"..translate("Preparation steps:")..
+"<br/>"..translate("1. In the <server and policy group management> page, create the policy group and node you are going to use, and apply the configuration (when adding nodes, you must select the policy group you want to join). Policy group type suggestion: fallback, game nodes must be support UDP and not a Vmess")..
+"<br/>"..translate("2. Click the <manage third party game rules> or <manage third party rule set> button to enter the rule list and download the rules you want to use")..
+"<br/>"..translate("3. On this page, set the corresponding configuration file and policy group of the rule you have downloaded, and save the settings")..
+"<br/>"..translate("4. Install the TUN or Meta core")..
+"<br/>"..
+"<br/>"..translate("When setting this page, if the groups is empty, please go to the <server and group management> page to add")..
+"<br/>"..
+"<br/>"..translate("Introduction to rule set usage: https://lancellc.gitbook.io/clash/clash-config-file/rule-provider")
 
 function IsRuleFile(e)
 e=e or""
@@ -48,7 +42,7 @@ function IsYmlFile(e)
 end
 
 -- [[ Edit Game Rule ]] --
-s = m:section(TypedSection, "game_config", translate("Game Rules and Groups"))
+s = m:section(TypedSection, "game_config", translate("Game Rules and Groups (Only TUN & Meta Core Support)"))
 s.anonymous = true
 s.addremove = true
 s.sortable = true
@@ -94,23 +88,37 @@ for t,f in ipairs(fs.glob("/etc/openclash/game_rules/*"))do
     end
   end
 end
-   
+
 o.rmempty = true
 
 ---- Proxy Group
 o = s:option(ListValue, "group", translate("Select Proxy Group"))
-uci:foreach("openclash", "groups",
-		function(s)
-		  if s.name ~= "" and s.name ~= nil then
-			   o:value(s.name)
+local groupnames,filename
+filename = m.uci:get(openclash, "config", "config_path")
+if filename then
+	groupnames = SYS.exec(string.format('ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "YAML.load_file(\'%s\')[\'proxy-groups\'].each do |i| puts i[\'name\']+\'##\' end" 2>/dev/null',filename))
+	if groupnames then
+		for groupname in string.gmatch(groupnames, "([^'##\n']+)##") do
+			if groupname ~= nil and groupname ~= "" then
+			  o:value(groupname)
 			end
-		end)
+		end
+	end
+end
+
+uci:foreach("openclash", "groups",
+    function(s)
+      if s.name ~= "" and s.name ~= nil then
+        o:value(s.name)
+      end
+    end)
+
 o:value("DIRECT")
 o:value("REJECT")
 o.rmempty = true
 
 -- [[ Edit Other Rule Provider ]] --
-s = m:section(TypedSection, "rule_provider_config", translate("Other Rule Providers and Groups"))
+s = m:section(TypedSection, "rule_provider_config", translate("Other Rule Providers and Groups (Only TUN & Meta Core Support)"))
 s.anonymous = true
 s.addremove = true
 s.sortable = true
@@ -161,12 +169,26 @@ o.rmempty = true
 
 ---- Proxy Group
 o = s:option(ListValue, "group", translate("Select Proxy Group"))
-uci:foreach("openclash", "groups",
-		function(s)
-		  if s.name ~= "" and s.name ~= nil then
-			   o:value(s.name)
+local groupnames,filename
+filename = m.uci:get(openclash, "config", "config_path")
+if filename then
+	groupnames = SYS.exec(string.format('ruby -ryaml -rYAML -I "/usr/share/openclash" -E UTF-8 -e "YAML.load_file(\'%s\')[\'proxy-groups\'].each do |i| puts i[\'name\']+\'##\' end" 2>/dev/null',filename))
+	if groupnames then
+		for groupname in string.gmatch(groupnames, "([^'##\n']+)##") do
+			if groupname ~= nil and groupname ~= "" then
+			  o:value(groupname)
 			end
-		end)
+		end
+	end
+end
+
+uci:foreach("openclash", "groups",
+    function(s)
+      if s.name ~= "" and s.name ~= nil then
+        o:value(s.name)
+      end
+    end)
+
 o:value("DIRECT")
 o:value("REJECT")
 o.rmempty = true
@@ -182,7 +204,7 @@ o:value("0", translate("Priority Match"))
 o:value("1", translate("Extended Match"))
 
 -- [[ Edit Custom Rule Provider ]] --
-s = m:section(TypedSection, "rule_providers", translate("Custom Rule Providers and Groups"))
+s = m:section(TypedSection, "rule_providers", translate("Custom Rule Providers and Groups (Only TUN & Meta Core Support)"))
 s.anonymous = true
 s.addremove = true
 s.sortable = true
@@ -225,14 +247,14 @@ local rm = {
 
 rmg = m:section(Table, rm)
 
-o = rmg:option(Button, "rule_mg")
+o = rmg:option(Button, "rule_mg", " ")
 o.inputtitle = translate("Game Rules Manage")
 o.inputstyle = "reload"
 o.write = function()
   HTTP.redirect(DISP.build_url("admin", "services", "openclash", "game-rules-manage"))
 end
 
-o = rmg:option(Button, "pro_mg")
+o = rmg:option(Button, "pro_mg", " ")
 o.inputtitle = translate("Other Rule Provider Manage")
 o.inputstyle = "reload"
 o.write = function()
@@ -245,15 +267,15 @@ local t = {
 
 ss = m:section(Table, t)
 
-o = ss:option(Button, "Commit") 
-o.inputtitle = translate("Commit Configurations")
+o = ss:option(Button, "Commit", " ")
+o.inputtitle = translate("Commit Settings")
 o.inputstyle = "apply"
 o.write = function()
   m.uci:commit("openclash")
 end
 
-o = ss:option(Button, "Apply")
-o.inputtitle = translate("Apply Configurations")
+o = ss:option(Button, "Apply", " ")
+o.inputtitle = translate("Apply Settings")
 o.inputstyle = "apply"
 o.write = function()
   m.uci:set("openclash", "config", "enable", 1)
@@ -261,5 +283,7 @@ o.write = function()
   SYS.call("/etc/init.d/openclash restart >/dev/null 2>&1 &")
   HTTP.redirect(DISP.build_url("admin", "services", "openclash"))
 end
+
+m:append(Template("openclash/toolbar_show"))
 
 return m

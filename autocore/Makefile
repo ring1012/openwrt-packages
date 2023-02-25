@@ -1,69 +1,71 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2010-2011 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
+# Copyright (C) 2020 Lean <coolsnowwolf@gmail.com>
+# Copyright (C) 2021 ImmortalWrt.org
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=autocore
-PKG_VERSION:=1
-PKG_RELEASE:=29
+PKG_RELEASE:=56
+
+PKG_CONFIG_DEPENDS:= \
+	CONFIG_TARGET_bcm27xx \
+	CONFIG_TARGET_bcm53xx \
+	CONFIG_TARGET_mvebu
 
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/target.mk
 
 define Package/autocore-arm
   TITLE:=ARM auto core script.
   MAINTAINER:=CN_SZTL
-  DEPENDS:=@(TARGET_bcm27xx||TARGET_bcm53xx||TARGET_mvebu||TARGET_ipq40xx||TARGET_ipq806x||TARGET_rockchip) \
+  DEPENDS:=@(arm||aarch64) \
+    +ethtool \
+    +TARGET_bcm27xx:bcm27xx-userland \
     +TARGET_bcm53xx:nvram \
-    +TARGET_ipq40xx:lm-sensors \
-	+ethtool
+    +TARGET_mvebu:mhz
   VARIANT:=arm
 endef
 
 define Package/autocore-x86
   TITLE:=x86/x64 auto core loadbalance script.
   MAINTAINER:=Lean / CN_SZTL
-  DEPENDS:=@TARGET_x86 +bc +lm-sensors +ethtool
+  DEPENDS:=@TARGET_x86 +lm-sensors +ethtool
   VARIANT:=x86
-endef
-
-define Package/autocore-switch
-  TITLE:=wireless auto core loadbalance script.
-  MAINTAINER:=GaryPang
-  DEPENDS:=@swconfig
-endef
-
-define Package/autocore-arm/description
-  Display more details info about the devices in LuCI.
 endef
 
 define Build/Compile
 endef
 
-define Package/autocore-arm/install
+define Package/autocore/install/Default
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./files/generic/60-autocore-reload-rpcd $(1)/etc/uci-defaults/
+
 	$(INSTALL_DIR) $(1)/sbin
-	$(INSTALL_BIN) ./files/arm/cpuinfo $(1)/sbin/cpuinfo
+	$(INSTALL_BIN) ./files/generic/cpuinfo $(1)/sbin/
+	$(INSTALL_BIN) ./files/generic/ethinfo $(1)/sbin/
+
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(CP) ./files/generic/luci-mod-status-autocore.json $(1)/usr/share/rpcd/acl.d/
+
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/status/include
-	$(INSTALL_DATA) ./files/arm/* $(1)/www/luci-static/resources/view/status/include/
+	$(INSTALL_DATA) ./files/generic/29_ethinfo.js $(1)/www/luci-static/resources/view/status/include/
+endef
+
+define Package/autocore-arm/install
+	$(call Package/autocore/install/Default,$(1))
+
+ifneq ($(filter ipq% %mt7622, $(TARGETID)),)
+	$(INSTALL_BIN) ./files/arm/tempinfo $(1)/sbin/
+endif
 endef
 
 define Package/autocore-x86/install
-	$(INSTALL_DIR) $(1)/sbin
-	$(INSTALL_BIN) ./files/x86/cpuinfo $(1)/sbin/cpuinfo
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/status/include
-	$(INSTALL_DATA) ./files/x86/29_eth.js $(1)/www/luci-static/resources/view/status/include/
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/admin_status/index/
-	$(INSTALL_DATA) ./files/x86/nvme_status.htm $(1)/usr/lib/lua/luci/view/admin_status/index/
-endef
+	$(call Package/autocore/install/Default,$(1))
 
-define Package/autocore-switch/install
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/status/include
-	$(INSTALL_DATA) ./files/switch/* $(1)/www/luci-static/resources/view/status/include/
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./files/x86/autocore $(1)/etc/init.d/
 endef
 
 $(eval $(call BuildPackage,autocore-arm))
 $(eval $(call BuildPackage,autocore-x86))
-$(eval $(call BuildPackage,autocore-switch))

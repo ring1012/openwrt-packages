@@ -1,8 +1,12 @@
 #!/bin/sh /etc/rc.common
-# Copyright (c) 2011-2015 OpenWrt.org
+# Copyright (C) 2022 Lean <coolsnowwolf@gmail.com>
+# Copyright (C) 2019-2021 Tianling Shen <cnsztl@immortalwrt.org>
 
 START=90
 STOP=10
+
+EXTRA_COMMANDS="check_status"
+EXTRA_HELP="	check_status Check running status of utils"
 
 restart_utils="true"
 
@@ -11,25 +15,20 @@ inital_conf(){
 	config_get "sw_flow" "config" "sw_flow" "0"
 	config_get "hw_flow" "config" "hw_flow" "0"
 	config_get "sfe_flow" "config" "sfe_flow" "0"
-	config_get "sfe_bridge" "config" "sfe_bridge" "0"
-	config_get "sfe_ipv6" "config" "sfe_ipv6" "0"
 	config_get "bbr_cca" "config" "bbr_cca" "0"
 	config_get "fullcone_nat" "config" "fullcone_nat" "0"
-	config_get "dns_acc" "config" "dns_acc" "0"
 	config_get "dns_caching" "config" "dns_caching" "0"
 	config_get "dns_caching_mode" "config" "dns_caching_mode" "0"
-	config_get "dns_caching_v4_dns" "config" "dns_caching_v4_dns"
-	config_get "dns_caching_v6_dns" "config" "dns_caching_v6_dns"
+	config_get "dns_caching_dns" "config" "dns_caching_dns"
 
-	[ ! -e "/lib/modules/$(uname -r)/xt_FLOWOFFLOAD.ko" ] && { sw_flow="0"; hw_flow="0"; }
-	[ ! -e "/lib/modules/$(uname -r)/fast-classifier.ko" ] && { sfe_flow="0"; sfe_bridge="0"; sfe_ipv6="0"; }
+	[ ! -e "/lib/modules/$(uname -r)/mtkhnat.ko" ] && hw_flow="0";
+	[[ ! -e "/lib/modules/$(uname -r)/xt_FLOWOFFLOAD.ko" && ! -e "/lib/modules/$(uname -r)/nft_flow_offload.ko" ]] && { sw_flow="0"; hw_flow="0"; }
 	[ ! -e "/lib/modules/$(uname -r)/tcp_bbr.ko" ] && bbr_cca="0"
-	[ ! -e "/lib/modules/$(uname -r)/xt_FULLCONENAT.ko" ] && fullcone_nat="0"
 }
 
 start_pdnsd() {
-	[ -d "/var/etc" ] || mkdir -p "/var/etc"
-	cat > "/var/etc/dnscache.conf" <<EOF
+	[ -d "/var/run/dnscache" ] || mkdir -p "/var/run/dnscache"
+	cat > "/var/run/dnscache/dnscache.conf" <<EOF
 global {
     perm_cache=1024;        # dns缓存大小，单位KB，建议不要写的太大
     cache_dir="/var/dnscache";     # 缓存文件的位置
@@ -48,7 +47,7 @@ global {
 
 server {
     label = "routine";
-    ip = ${dns_caching_v4_dns};     # 这里为主要上级 dns 的 ip 地址，建议填写一个当地最快的DNS地址
+    ip = ${dns_caching_dns};     # 这里为主要上级 dns 的 ip 地址，建议填写一个当地最快的DNS地址
     timeout = 5;              # DNS请求超时时间
     reject = 74.125.127.102,  # 以下是脏IP，也就是DNS污染一般会返回的结果，如果收到如下DNS结果会触发二次请求（TCP协议一般不会碰到脏IP）
         74.125.155.102,
@@ -141,8 +140,9 @@ EOF
 		chown -R nobody.nogroup "/var/dnscache"
 	fi
 
-	[ -d "/var/sbin" ] || mkdir -p "/var/sbin" && cp -a "/usr/sbin/pdnsd" "/var/sbin/dnscache"
-	/var/sbin/dnscache -c "/var/etc/dnscache.conf" &
+	[ -d "/var/sbin" ] || mkdir -p "/var/sbin"
+	cp -a "/usr/sbin/pdnsd" "/var/sbin/dnscache"
+	/var/sbin/dnscache -c "/var/run/dnscache/dnscache.conf" > "/var/log/dnscache.file" 2>&1 &
 	echo "PDNSD: Start DNS Caching"
 }
 
@@ -153,7 +153,7 @@ LogOn false
 LogFileThresholdLength 102400
 LogFileFolder /var/run/dnscache
 UDPLocal 127.0.0.1:5333
-UDPGroup ${dns_caching_v4_dns},${dns_caching_v6_dns} * on
+UDPGroup ${dns_caching_dns} * on
 GroupFile
 BlockIP 243.185.187.39,46.82.174.68,37.61.54.158,93.46.8.89,59.24.3.173,203.98.7.65,8.7.198.45,78.16.49.15,159.106.121.75,69.63.187.12,31.13.76.8,31.13.64.49
 IPSubstituting
@@ -182,15 +182,26 @@ DomainStatisticTempletFile
 StatisticUpdateInterval 29
 EOF
 
-	[ -d "/var/sbin" ] || mkdir -p "/var/sbin" && cp -a "/usr/bin/dnsforwarder" "/var/sbin/dnscache"
-	/var/sbin/dnscache -f "/var/run/dnscache/dnscache.conf" &
+	[ -d "/var/sbin" ] || mkdir -p "/var/sbin"
+	cp -a "/usr/bin/dnsforwarder" "/var/sbin/dnscache"
+	/var/sbin/dnscache -f "/var/run/dnscache/dnscache.conf" > "/var/log/dnscache.file" 2>&1 &
 	echo "DnsForwarder: Start DNS Caching"
 
 }
 
+start_dnsproxy() {
+	[ -d "/var/run/dnscache" ] || mkdir -p "/var/run/dnscache"
+	echo -e "${dns_caching_dns//,/\\n}" > "/var/run/dnscache/dnscache.conf"
+
+	[ -d "/var/sbin" ] || mkdir -p "/var/sbin"
+	cp -a "/usr/bin/dnsproxy" "/var/sbin/dnscache"
+	/var/sbin/dnscache -l "127.0.0.1" -p "5333" -b "tls://9.9.9.9" -f "tls://8.8.8.8" -u "/var/run/dnscache/dnscache.conf" --all-servers --cache --cache-min-ttl=3600 > "/var/log/dnscache.file" 2>&1 &
+	echo "DNSProxy: Start DNS Caching"
+}
+
 stop_dnscache() {
-	killall -9 "dnscache" 2>"/dev/null"
-	kill -9 $(ps | grep dnscache-while.sh | grep -v "grep" | awk '{print $1}') 2>"/dev/null"
+	killall -9 "dnscache"
+	kill -9 $(ps -w | grep dnscache-while.sh | grep -v "grep" | awk '{print $1}')
 	rm -rf "/var/dnscache" "/var/run/dnscache"
 	echo "Stop DNS Caching"
 }
@@ -200,14 +211,29 @@ change_dns() {
 	uci add_list dhcp.@dnsmasq[0].server="127.0.0.1#5333"
 	uci set dhcp.@dnsmasq[0].noresolv="1"
 	uci commit dhcp
-
 }
 
 revert_dns() {
+  uci set dhcp.@dnsmasq[0].noresolv="0"
 	uci -q del_list dhcp.@dnsmasq[0].server="127.0.0.1#5333"
-	uci set dhcp.@dnsmasq[0].resolvfile="/tmp/resolv.conf.d/resolv.conf.auto"
-	uci set dhcp.@dnsmasq[0].noresolv="0"
+	if [ -d "/tmp/resolv.conf.d" ]; then
+		uci set dhcp.@dnsmasq[0].resolvfile="/tmp/resolv.conf.d/resolv.conf.auto"
+	else
+		uci set dhcp.@dnsmasq[0].resolvfile="/tmp/resolv.conf.auto"
+	fi
 	uci commit dhcp
+}
+
+load_sfe() {
+	local kernel_version=$(uname -r)
+
+	[ -e "/lib/modules/$kernel_version/shortcut-fe-cm.ko" ] && modprobe shortcut-fe-cm
+	[ -e "/lib/modules/$kernel_version/fast-classifier.ko" ] && modprobe fast-classifier
+}
+
+unload_sfe() {
+	[ -d /sys/module/shortcut_fe_cm ] && rmmod shortcut_fe_cm 
+	[ -d /sys/module/fast_classifier ] && rmmod fast_classifier
 }
 
 start(){
@@ -218,15 +244,13 @@ start(){
 	uci set firewall.@defaults[0].fullcone="${fullcone_nat}"
 	uci commit firewall
 
+	[ "${sw_flow}" -eq "0" ] && [ "${hw_flow}" -eq "1" ] && {
+		lsmod | grep -q mtkhnat || modprobe mtkhnat
+	}
+
 	[ "${sw_flow}" -ne "1" ] && [ "${sfe_flow}" -eq "1" ] && {
-		lsmod | grep -q fast_classifier || modprobe fast_classifier 2>"/dev/null"
-		echo "${sfe_bridge}" > "/sys/fast_classifier/skip_to_bridge_ingress" 2>"/dev/null"
-		if [ "${sfe_ipv6}" -eq "1" ]; then
-			[ ! -e "/dev/sfe_ipv6" ] && mknod "/dev/sfe_ipv6" "c" "$(cat "/sys/sfe_ipv6/debug_dev")" "0"
-		else
-			rm -f "/dev/sfe_ipv6"
-		fi
-}
+		load_sfe
+	}
 
 	if [ "${bbr_cca}" -eq "1" ];  then
 		sysctl -w net.ipv4.tcp_congestion_control="bbr"
@@ -234,9 +258,31 @@ start(){
 		sysctl -w net.ipv4.tcp_congestion_control="cubic"
 	fi
 
+	if [ "${dns_caching}" -eq "1" ];  then
+		stop_dnscache
+		sleep 1
+
+		rm -f "/var/log/dnscache.file"
+		if [ "${dns_caching_mode}" = "1" ];  then
+			start_pdnsd
+		elif [ "${dns_caching_mode}" = "2" ];  then
+			start_dnsforwarder
+		elif [ "${dns_caching_mode}" = "3" ];  then
+			start_dnsproxy
+		fi
+
+		change_dns
+
+		/usr/share/dnscache/dnscache-while.sh > "/var/log/dnscache.file" 2>&1 &
+	else
+		revert_dns
+		stop_dnscache
+	fi
+
 	if [ "${restart_utils}" = "true" ]; then
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1 && echo "DNSMASQ change"
-		/etc/init.d/firewall restart >/dev/null 2>&1
+		echo "DNSMASQ change"
+		/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
+		/etc/init.d/firewall restart >"/dev/null" 2>&1
 	fi
 }
 
@@ -248,22 +294,75 @@ stop(){
 	uci set firewall.@defaults[0].fullcone="${fullcone_nat}"
 	uci commit firewall
 
-	[ "${sfe_flow}" -ne "1" ] && {
-		echo "0" > "/sys/fast_classifier/skip_to_bridge_ingress" 2>"/dev/null"
-		rm -f "/dev/sfe_ipv6"
-		rmmod "fast_classifier" 2>"/dev/null"
-}
+	[ "${hw_flow}" -eq "0" ] && {
+		lsmod | grep -q mtkhnat && rmmod mtkhnat
+	}
+
+	unload_sfe
+
+	stop_dnscache
+	revert_dns
 
 	if [ "${restart_utils}" = "true" ]; then
-		/etc/init.d/dnsmasq restart >/dev/null 2>&1 && echo "DNSMASQ revert"
-		/etc/init.d/firewall restart >/dev/null 2>&1
+		echo "DNSMASQ revert"
+		/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
+		/etc/init.d/firewall restart >"/dev/null" 2>&1
 	fi
 }
 
 restart(){
 	restart_utils="false"
+
 	stop
 	start
-	/etc/init.d/dnsmasq restart >/dev/null 2>&1 && echo "DNSMASQ restart"
-	/etc/init.d/firewall restart >/dev/null 2>&1
+
+	echo "DNSMASQ restart"
+	/etc/init.d/dnsmasq restart >"/dev/null" 2>&1
+	/etc/init.d/firewall restart >"/dev/null" 2>&1
+}
+
+check_status(){
+	case "$1" in
+	"fastpath")
+		if [[ "$(cat "/sys/module/xt_FLOWOFFLOAD/refcnt" 2>"/dev/null" || echo 0)" -ne "0" || "$(cat "/sys/module/nft_flow_offload/refcnt" 2>"/dev/null" || echo 0)" -ne "0" ]]; then
+			echo -n "Flow Offloading"
+			exit 0
+		elif [[ "$(cat "/sys/module/xt_FLOWOFFLOAD/refcnt" 2>"/dev/null")" -eq "0" || "$(cat "/sys/module/nft_flow_offload/refcnt" 2>"/dev/null")" -eq "0" ]] && \
+		    [ -e /sys/kernel/debug/hnat/hnat_version ]; then
+			echo -n "MediaTek HWNAT"
+			exit 0
+		elif [ -d /sys/kernel/debug/ecm/ecm_nss_ipv4 ]; then
+			echo -n "QCA-NSS-ECM"
+			exit 0
+		elif [ -d /sys/kernel/debug/ecm/ecm_sfe_ipv4 ]; then
+			echo -n "QCA-ECM-SFE"
+			exit 0
+		elif [ -d /sys/module/fast_classifier ]; then
+			echo -n "Shortcut-FE"
+			exit 0
+		elif [ -d /sys/module/shortcut_fe_cm ]; then
+			echo -n "Shortcut-FE ECM"
+			exit 0
+		else
+			exit 1
+		fi
+		;;
+	"fullconenat")
+    if [[ -z "$(iptables -t nat -L zone_wan_postrouting | grep -i fullcone)"  && "$(cat "/sys/module/nft_fullcone/refcnt" 2>"/dev/null" || echo 0)" -eq "0" ]]; then
+      exit 1
+    else
+      exit 0
+    fi
+		;;
+	"bbr")
+		[ "x$(cat "/proc/sys/net/ipv4/tcp_congestion_control" 2>"/dev/null")" = "xbbr" ] && \
+			exit 0 || exit 1
+		;;
+	"dns")
+		pgrep "dnscache" >"/dev/null" && exit 0 || exit 1
+		;;
+	*)
+		exit 2
+		;;
+	esac
 }

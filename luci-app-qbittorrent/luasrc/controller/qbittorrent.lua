@@ -1,10 +1,11 @@
 module("luci.controller.qbittorrent",package.seeall)
 
 function index()
+	entry({"admin", "nas"}, firstchild(), _("NAS") , 45).dependent = false
   if not nixio.fs.access("/etc/config/qbittorrent")then
     return
   end
-  entry({"admin","nas","qBittorrent"},cbi("qbittorrent"),_("qBittorrent"))
+  entry({"admin","nas","qBittorrent"},cbi("qbittorrent"),_("qBittorrent")).acl_depends = { "luci-app-qbittorrent" }
   entry({"admin","nas","qBittorrent","status"},call("act_status")).leaf=true
 end
 

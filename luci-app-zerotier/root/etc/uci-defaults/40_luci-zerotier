@@ -3,9 +3,10 @@
 uci -q batch <<-EOF >/dev/null
 	delete ucitrack.@zerotier[-1]
 	add ucitrack zerotier
-	set ucitrack.@zerotier[-1].init=zerotier
+	set ucitrack.@zerotier[-1].init=luci-zerotier
 	commit ucitrack
-  delete firewall.zerotier
+
+	delete firewall.zerotier
 	set firewall.zerotier=include
 	set firewall.zerotier.type=script
 	set firewall.zerotier.path=/etc/zerotier.start
@@ -14,5 +15,4 @@ uci -q batch <<-EOF >/dev/null
 EOF
 
 rm -f /tmp/luci-indexcache
-killall -HUP rpcd 2>/dev/null
 exit 0

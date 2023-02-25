@@ -6,8 +6,8 @@ local sys = require "luci.sys"
 local sid = arg[1]
 local fs = require "luci.openclash"
 
-font_red = [[<font color="red">]]
-font_off = [[</font>]]
+font_red = [[<b style=color:red>]]
+font_off = [[</b>]]
 bold_on  = [[<strong>]]
 bold_off = [[</strong>]]
 
@@ -49,6 +49,11 @@ for t,f in ipairs(fs.glob("/etc/openclash/config/*"))do
   end
 end
 
+o = s:option(Flag, "manual", translate("Custom Tag"))
+o.rmempty = false
+o.default = "0"
+o.description = translate("Mark as Custom Node to Prevent Retention config from being Deleted When Enabled")
+
 o = s:option(ListValue, "type", translate("Provider Type"))
 o.rmempty = true
 o.description = translate("Choose The Provider Type")
@@ -57,6 +62,7 @@ o:value("file")
 
 o = s:option(Value, "name", translate("Provider Name"))
 o.rmempty = false
+o.default = "Proxy-provider - "..sid
 
 o = s:option(ListValue, "path", translate("Provider Path"))
 o.description = translate("Update Your Proxy Provider File From Config Luci Page")
@@ -78,6 +84,10 @@ o = s:option(Value, "provider_url", translate("Provider URL"))
 o.rmempty = false
 o:depends("type", "http")
 
+o = s:option(Value, "provider_filter", translate("Provider Filter"))
+o.rmempty = true
+o.placeholder = "bgp|sg"
+
 o = s:option(Value, "provider_interval", translate("Provider Interval(s)"))
 o.default = "3600"
 o.rmempty = false
@@ -86,9 +96,10 @@ o:depends("type", "http")
 o = s:option(ListValue, "health_check", translate("Provider Health Check"))
 o:value("false", translate("Disable"))
 o:value("true", translate("Enable"))
-o.default=true
+o.default = true
 
 o = s:option(Value, "health_check_url", translate("Health Check URL"))
+o:value("http://cp.cloudflare.com/generate_204")
 o:value("http://www.gstatic.com/generate_204")
 o:value("https://cp.cloudflare.com/generate_204")
 o.rmempty = false
@@ -100,6 +111,7 @@ o.rmempty = false
 o = s:option(DynamicList, "groups", translate("Proxy Group"))
 o.description = font_red..bold_on..translate("No Need Set when Config Create, The added Proxy Groups Must Exist")..bold_off..font_off
 o.rmempty = true
+o:value("all", translate("All Groups"))
 m.uci:foreach("openclash", "groups",
 		function(s)
 			if s.name ~= "" and s.name ~= nil then
@@ -112,20 +124,21 @@ local t = {
 }
 a = m:section(Table, t)
 
-o = a:option(Button,"Commit")
-o.inputtitle = translate("Commit Configurations")
+o = a:option(Button,"Commit", " ")
+o.inputtitle = translate("Commit Settings")
 o.inputstyle = "apply"
 o.write = function()
    m.uci:commit(openclash)
    luci.http.redirect(m.redirect)
 end
 
-o = a:option(Button,"Back")
-o.inputtitle = translate("Back Configurations")
+o = a:option(Button,"Back", " ")
+o.inputtitle = translate("Back Settings")
 o.inputstyle = "reset"
 o.write = function()
-   m.uci:revert(openclash)
+   m.uci:revert(openclash, sid)
    luci.http.redirect(m.redirect)
 end
 
+m:append(Template("openclash/toolbar_show"))
 return m

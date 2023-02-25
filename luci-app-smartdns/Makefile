@@ -6,8 +6,6 @@ include $(TOPDIR)/rules.mk
 
 PKG_LICENSE:=GPL-3.0-or-later
 PKG_MAINTAINER:=Nick Peng <pymumu@gmail.com>
-PKG_VERSION:=9.2020.10.15
-PKG_RELEASE:=2235
 
 LUCI_TITLE:=LuCI for smartdns
 LUCI_DESCRIPTION:=Provides Luci for smartdns
@@ -19,13 +17,6 @@ define Package/$(PKG_NAME)/config
 help
 	$(LUCI_TITLE)
 	Version: $(PKG_VERSION)-$(PKG_RELEASE)
-endef
-
-define Package/luci-app-smartdns/conffiles
-/etc/config/smartdns
-/etc/smartdns/address.conf
-/etc/smartdns/blacklist-ip.conf
-/etc/smartdns/custom.conf
 endef
 
 include $(TOPDIR)/feeds/luci/luci.mk

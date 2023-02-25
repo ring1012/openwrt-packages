@@ -7,9 +7,7 @@ include $(TOPDIR)/rules.mk
 
 LUCI_TITLE:=Open App Filter Module
 LUCI_PKGARCH:=all
-LUCI_DEPENDS:=+kmod-oaf +appfilter
+LUCI_DEPENDS:=+appfilter +kmod-oaf  +luci-compat
 PKG_NAME:=luci-app-oaf
-PKG_VERSION:=3.0
-PKG_RELEASE:=1
 include $(TOPDIR)/feeds/luci/luci.mk
 # call BuildPackage - OpenWrt buildroot signature

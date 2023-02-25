@@ -2,9 +2,7 @@
 
 START=60
 
-extra_command "makeconfig"
-extra_command "makegfwlist"
-extra_command "health"
+EXTRA_COMMANDS="makeconfig makegfwlist health"
 
 CRON_FILE=/etc/crontabs/root
 PID_PATH=/var/run/dnsforwarder
@@ -25,11 +23,11 @@ del_cron()
 	/etc/init.d/cron restart
 }
 
-fixflowoffload(){
-    dns=$(uci get flowoffload.@flow[0].dns 2>/dev/null)
+fixturboacc(){
+    dns=$(uci get turboacc.config.dns_caching 2>/dev/null)
     if [ $dns -eq 1 ];  then
-        uci set flowoffload.@flow[0].dns=0 && uci commit flowoffload
-        /etc/init.d/flowoffload restart
+        uci set turboacc.config.dns_caching=0 && uci commit turboacc
+        /etc/init.d/turboacc restart
     fi
 }
 
@@ -174,7 +172,7 @@ start()
         exit
     fi
     makeconfig
-	fixflowoffload	
+	fixturboacc
     dnsforwarder -f $DNSFORWARDER_CONF -d
 	sleep 10
     mkdir -p ${PID_PATH}
@@ -196,6 +194,12 @@ start()
         uci commit dhcp
         /etc/init.d/dnsmasq restart
     fi
+    	local dnsmasq_server_addr=$(uci get dhcp.@dnsmasq[0].server 2>/dev/null)
+	if [ -n "${dnsmasq_server_addr}" ]; then
+		uci set dhcp.@dnsmasq[0].noresolv=1
+		uci commit dhcp 
+		/etc/init.d/dnsmasq restart
+	fi
 	add_cron
 }
 
@@ -204,8 +208,11 @@ stop()
 	del_cron
 	logger -t stopping dnsforwarder
     local addr=$(uci get dnsforwarder.@arguments[0].addr 2>/dev/null)
+    local dnsmasq=$(uci get dnsforwarder.@arguments[0].dnsmasq 2>/dev/null)
     addr=${addr/:/#}
-    uci del_list dhcp.@dnsmasq[0].server=$addr 2>/dev/null
+    if [ "${dnsmasq}" = "1" ]; then
+	    uci del_list dhcp.@dnsmasq[0].server=$addr 2>/dev/null
+    fi
     uci set dhcp.@dnsmasq[0].resolvfile=/tmp/resolv.conf.d/resolv.conf.auto 2>/dev/null
     uci delete dhcp.@dnsmasq[0].noresolv 2>/dev/null
 	uci delete dhcp.@dnsmasq[0].serversfile 2>/dev/null

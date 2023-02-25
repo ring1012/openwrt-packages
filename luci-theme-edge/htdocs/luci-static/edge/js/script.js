@@ -2,10 +2,10 @@
  *  Edge is a clean HTML5 theme for LuCI. It is based on luci-theme-Argon
  *
  *  luci-theme-edge
- *      Copyright 2020 Garypang <garyp@qq.com>
+ *      Copyright 2020 Kiddin'
  *
  *  Have a bug? Please create an issue here on GitHub!
- *      https://github.com/garypang13/luci-theme-edge/issues
+ *      https://github.com/kiddin9/luci-theme-edge/issues
  *
  *  luci-theme-material: 
  *      Copyright 2015 Lutty Yang <lutty@wcan.in>
@@ -260,56 +260,13 @@ document.addEventListener('luci-loaded', function(ev) {
      /*Set the status back to off*/
    });
 	setTimeout(function(){
-var config = {
-    // How long Waves effect duration 
-    // when it's clicked (in milliseconds)
-    duration: 600
-};
-    Waves.attach("button,input[type='button'],input[type='reset'],input[type='submit']", ['waves-light']);
-	// Ripple on hover
-$("button,input[type='button'],input[type='reset'],input[type='submit']").mouseenter(function() {
-    Waves.ripple(this, {wait: null});
-}).mouseleave(function() {
-    Waves.calm(this);
-});
-  Waves.init(config);
-$(".waves-input-wrapper").filter(function () {
-  if($(this).children().css("display")=="none"){
-        return true;
-    }else{
-        return false;
-    }
-}).hide();
-
-$("div>select:first-child,div>input[type='text']:first-child").filter(function () {
-return (!$(this).parents(".cbi-dynlist").length&&!$("body.Diagnostics").length&&!$(this).hasClass("cbi-input-password"))
-}).after("<span class='focus-input'></span>");
-
 $("input[type='checkbox']").filter(function () {
   return (!$(this).next("label").length)
 }).show();
-
-$("select,input").filter(function () {
-  return ($(this).next(".focus-input").length)
-}).focus(function(){
-  $(this).css("border-bottom","1px solid #fff");
-}).blur(function(){
-  $(this).css("border-bottom","1px solid #9e9e9e");
-});
 	}, 0);
 
 var options = { attributes: true};
 function callback() {
-$("div>select:first-child,div>input[type='text']:first-child").filter(function () {
-return (!$(this).parents(".cbi-dynlist").length&&!$(this).hasClass("cbi-input-password"))
-}).after("<span class='focus-input'></span>");
-$("select,input").filter(function () {
-  return ($(this).next(".focus-input").length)
-}).focus(function(){
-  $(this).css("border-bottom","1px solid #fff");
-}).blur(function(){
-  $(this).css("border-bottom","1px solid #9e9e9e");
-});
 $("input[type='checkbox']").filter(function () {
   return (!$(this).next("label").length)
 }).show();
@@ -317,5 +274,8 @@ $("input[type='checkbox']").filter(function () {
 var mutationObserver = new MutationObserver(callback);
  mutationObserver.observe($("body")[0], options);
  $(".cbi-value").has("textarea").css("background","none");
+if(document.body.scrollHeight > window.innerHeight){
+	$(".cbi-page-actions.control-group").addClass("fixed")
+}
 })(jQuery);
 });

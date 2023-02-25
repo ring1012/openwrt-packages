@@ -1,6 +1,8 @@
 local fs = require "nixio.fs"
 
-m = Map("cifs", translate("Mount SMB/CIFS Netshare"), translate("Mount SMB/CIFS Netshare for OpenWrt"))
+m = Map("cifs")
+m.title = translate("Mount SMB/CIFS Netshare")
+m.description = translate("Mount SMB/CIFS Netshare for OpenWrt")
 
 s = m:section(TypedSection, "cifs")
 s.anonymous = true
@@ -33,9 +35,9 @@ pth.size = 10
 
 smbver = s:option(Value, "smbver", translate("SMB Version"))
 smbver.rmempty = false
-smbver:value("1.0","SMB v1")
-smbver:value("2.0","SMB v2")
-smbver:value("3.0","SMB v3")
+smbver:value("1.0", "SMB v1")
+smbver:value("2.0", "SMB v2")
+smbver:value("3.0", "SMB v3")
 smbver.default = "2.0"
 smbver.size = 3
 

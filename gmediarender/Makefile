@@ -8,14 +8,15 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gmediarender
-PKG_VERSION:=2020-01-10
+PKG_VERSION:=2021-03-15
 PKG_RELEASE=$(PKG_SOURCE_VERSION)
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/hzeller/gmrender-resurrect.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_VERSION:=26d8f7edf5336bc30f7334c6ad459bf7f4f90ff2
+PKG_SOURCE_VERSION:=c455d130d12edd4501c373aea0ecad2158c9448c
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION)-$(PKG_SOURCE_VERSION).tar.gz
+PKG_MIRROR_HASH:=skip
 
 PKG_FIXUP:=autoreconf
 PKG_INSTALL=1
@@ -47,4 +48,3 @@ define Package/gmediarender/install
 endef
 
 $(eval $(call BuildPackage,gmediarender))
-

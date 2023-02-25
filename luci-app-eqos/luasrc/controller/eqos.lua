@@ -4,6 +4,8 @@ function index()
 	if not nixio.fs.access("/etc/config/eqos") then
 		return
 	end
-	
-	entry({"admin", "network", "eqos"}, cbi("eqos"), _("EQoS"))
+
+	local page = entry({"admin", "network", "eqos"}, cbi("eqos"), "EQoS")
+	page.dependent = true
+	page.acl_depends = { "luci-app-eqos" }
 end

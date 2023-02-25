@@ -1,8 +1,7 @@
-
 <div align="center">
-  <img src="https://raw.githubusercontent.com/jerrykuku/staff/master/Helloworld_title.png"  >
+  <img src="https://raw.githubusercontent.com/jerrykuku/staff/master/helloworld-logo1.png" width="500px"  >
   <h1 align="center">
-    An openwrt Internet surfing plug-in
+    An OpenWrt Internet surfing plug-in
   </h1>
     <h3 align="center">
     HelloWorld是一个以用户最佳主观体验为导向的插件，它支持多种主流协议和多种自定义视频分流服务，拥有精美的操作界面，并配上直观的节点信息。<br><br>
@@ -15,35 +14,34 @@
   <a href="https://github.com/jerrykuku/luci-app-vssr/pulls">
     <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="">
   </a>
-  
+
   <a href="https://github.com/jerrykuku/luci-app-vssr/issues/new">
     <img src="https://img.shields.io/badge/Issues-welcome-brightgreen.svg">
   </a>
-  
+
   <a href="https://github.com/jerrykuku/luci-app-vssr/releases">
-    <img src="https://img.shields.io/badge/release-v1.20-blue.svg?">
+    <img src="https://img.shields.io/badge/release-v1.25-blue.svg?">
   </a>
-  
+
   <a href="https://github.com/jerrykuku/luci-app-vssr/releases">
     <img src="https://img.shields.io/github/downloads/jerrykuku/luci-app-vssr/total">
   </a>
-  
+
   <a href="https://t.me/PIN1Group">
     <img src="https://img.shields.io/badge/Contact-telegram-blue">
   </a>
 </div>
-
 
 <b><br>支持全部类型的节点分流</b>  
 目前只适配最新版 argon主题 （其他主题下应该也可以用 但显示应该不会很完美）  
 目前Lean最新版本的openwrt 已经可以直接拉取源码到 package/lean 下直接进行勾选并编译。  
 
 
-### 更新日志 2020-12-06  v1.20
-- NEW：局域网访问控制增加列表内或列表外代理的选项。
-- NEW：现在所有的分流域名都可以自定义了，具体参见新的功能菜单 分流设置。
-- FIX：修复了在导入trojan链接时，不能导入密码的错误。
-- FIX：修复一些应用程序路径检测错误。
+### 更新日志 2022-04-23  v1.25
+- UPDATE: 适配19.07 LuCI。
+- FIX: 继续优化订阅节点时旗帜匹配的准确性。
+- FIX: 优化了一些block的间距问题，同时优化了暗黑模式下的颜色显示【最好搭配最新版argon主题】。
+
 
 详情见[具体日志](./relnotes.txt)。 
 
@@ -73,7 +71,42 @@ make menuconfig
 make -j1 V=s
 ```
 
+### 问题解决
+
+使用lede最新源码编译失败，报错缺少依赖：
+
+```
+satisfy_dependencies_for: Cannot satisfy the following dependencies for luci-app-vssr:
+- shadowsocksr-libev-ssr-local
+- shadowsocksr-libev-ssr-redir
+- shadowsocksr-libev-ssr-check
+- xray-core
+- xray-plugin
+- shadowsocksr-libev-ssr-server
+opkg_install_cmd: Cannot install package luci-app-vssr.
+```
+
+原因是lede缺少软件源，解决办法，清除缓存重新下载编译：
+
+```
+# 1.清除缓存
+rm -rf tmp
+
+# 2.feeds.conf文件添加源
+src-git helloworld https://github.com/fw876/helloworld
+src-git passwall https://github.com/xiaorouji/openwrt-passwall
+
+# 3.重新执行升级安装下载编译等操作
+./scripts/feeds update -a
+./scripts/feeds install -a
+make -j8 download V=s
+make -j1 V=s
+```
+
+或者也可以完全删除lede，重新git并修改feeds.conf（比较耗时）
+
 ### 感谢
+
 https://github.com/coolsnowwolf/lede
 
 ### 我的其它项目

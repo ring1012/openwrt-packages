@@ -9,9 +9,8 @@ include $(TOPDIR)/rules.mk
 LUCI_TITLE:=LuCI for SMB/CIFS Mount
 LUCI_DEPENDS:=+kmod-fs-cifs +kmod-nls-utf8
 LUCI_PKGARCH:=all
+
 PKG_NAME:=luci-app-cifs-mount
-PKG_VERSION:=1
-PKG_RELEASE:=7
 
 include $(TOPDIR)/feeds/luci/luci.mk
 

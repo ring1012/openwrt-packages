@@ -1,76 +1,58 @@
+# SPDX-Identifier-License: GPL-3.0-only
 #
-# Copyright (C) 2015-2016 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v3.
-#
+# Copyright (C) 2021 ImmortalWrt.org
 
 include $(TOPDIR)/rules.mk
 
-ifeq ($(ARCH),x86_64)
-	PKG_ARCH_VERYSYNC:=amd64
-endif
-ifeq ($(ARCH),mipsel)
-	PKG_ARCH_VERYSYNC:=mipsle
-endif
-ifeq ($(ARCH),mips)
-	PKG_ARCH_VERYSYNC:=mips
-endif
-ifeq ($(ARCH),i386)
-	PKG_ARCH_VERYSYNC:=386
-endif
-ifeq ($(ARCH),arm)
-	PKG_ARCH_VERYSYNC:=arm
-endif
 ifeq ($(ARCH),aarch64)
-	PKG_ARCH_VERYSYNC:=arm64
+  PKG_ARCH_VERYSYNC:=arm64
+  PKG_HASH:=skip
+else ifeq ($(ARCH),arm)
+  PKG_ARCH_VERYSYNC:=arm
+  PKG_HASH:=skip
+else ifeq ($(ARCH),i386)
+  PKG_ARCH_VERYSYNC:=386
+  PKG_HASH:=skip
+else ifeq ($(ARCH),mips)
+  PKG_ARCH_VERYSYNC:=mips
+  PKG_HASH:=skip
+else ifeq ($(ARCH),mipsel)
+  PKG_ARCH_VERYSYNC:=mipsle
+  PKG_HASH:=skip
+else ifeq ($(ARCH),powerpc64)
+  PKG_ARCH_VERYSYNC:=ppc64
+  PKG_HASH:=skip
+else ifeq ($(ARCH),x86_64)
+  PKG_ARCH_VERYSYNC:=amd64
+  PKG_HASH:=skip
 endif
-ifeq ($(ARCH),powerpc64)
-	PKG_ARCH_VERYSYNC:=ppc64
-endif
-
-LATEST_VERSION:=$(shell curl http://www.verysync.com/shell/latest)
 
 PKG_NAME:=verysync
+PKG_VERSION:=2.16.0
+PKG_RELEASE:=20
 
-ifneq ($(LATEST_VERSION),)
-	PKG_VERSION:=$(LATEST_VERSION)
-else
-	PKG_VERSION:=v1.5.5
-endif
-
-PKG_RELEASE:=1
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE:=$(PKG_NAME)-linux-$(PKG_ARCH_VERYSYNC)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=http://dl.verysync.com/releases/$(PKG_VERSION)/
+PKG_SOURCE:=$(PKG_NAME)-linux-$(PKG_ARCH_VERYSYNC)-v$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=http://dl.verysync.com/releases/v$(PKG_VERSION)/ \
+		http://dl-cn.verysync.com/releases/v$(PKG_VERSION)/
 PKG_HASH:=skip
+PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-linux-$(PKG_ARCH_VERYSYNC)-v$(PKG_VERSION)
 
 include $(INCLUDE_DIR)/package.mk
 
-define Package/$(PKG_NAME)
-	SECTION:=net
-	CATEGORY:=Network
-	TITLE:=A efficient data transmission tool
-	DEPENDS:=
-	URL:=http://www.verysync.com
-endef
-
-define Package/$(PKG_NAME)/description
-  Verysync is a efficient data transmission tool.
-endef
-
-define Build/Prepare
-	tar -xzvf $(DL_DIR)/$(PKG_SOURCE) -C $(PKG_BUILD_DIR)
-endef
-
-define Build/Configure
+define Package/verysync
+  SECTION:=net
+  CATEGORY:=Network
+  TITLE:=A efficient data transmission tool
+  URL:=http://www.verysync.com
+  DEPENDS:=@(aarch64||arm||i386||mips||mipsel||powerpc64||x86_64)
 endef
 
 define Build/Compile
 endef
 
-define Package/$(PKG_NAME)/install
+define Package/verysync/install
 	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME)-linux-$(PKG_ARCH_VERYSYNC)-$(PKG_VERSION)/verysync $(1)/usr/bin/verysync
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/verysync $(1)/usr/bin/verysync
 endef
 
-$(eval $(call BuildPackage,$(PKG_NAME)))
+$(eval $(call BuildPackage,verysync))

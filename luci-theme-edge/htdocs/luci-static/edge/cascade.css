@@ -2,10 +2,10 @@
  *  Edge is a clean HTML5 theme for LuCI. It is based on luci-theme-Argon
  *
  *  luci-theme-edge
- *      Copyright 2020 Garypang <garyp@qq.com>
+ *      Copyright 2020 Kiddin'
  *
  *  Have a bug? Please create an issue here on GitHub!
- *      https://github.com/garypang13/luci-theme-edge/issues
+ *      https://github.com/kiddin9/luci-theme-edge/issues
  *
  *  luci-theme-material: header
  *      Copyright 2015 Lutty Yang <lutty@wcan.in>
@@ -385,12 +385,11 @@ h5,
 h6 {
 	font-family: inherit;
 	font-weight: normal;
-	line-height: 1.1 !important;
+	line-height: 1.1rem;
 	color: inherit;
 }
 
 html {
-	overflow-y: hidden;
 	-webkit-text-size-adjust: 100%;
 	-ms-text-size-adjust: 100%;
 }
@@ -403,7 +402,6 @@ body {
 
 html,
 body {
-	height: 100%;
 	margin: 0;
 	padding: 0;
 	overflow-x: hidden;
@@ -1393,7 +1391,6 @@ td > table > tbody > tr > td,
 }
 
 button:hover,
-.waves-input-wrapper:hover,
 .btn:hover,
 .cbi-button:hover,
 .item:hover::after {
@@ -1486,7 +1483,7 @@ button:hover,
 	font-weight: normal;
 	color: #fff;
 	border: none;
-	background-color: #00CFDD !important;
+	background-color: #23bd70 !important;
 }
 /* green */
 .cbi-button-success,
@@ -1563,6 +1560,14 @@ ul.tabs,.tabmenu .tabs,#tabmenu .tabs,ul.cbi-tabmenu {
 #packages{
 	margin-left: -2%;
     width: 105%;
+}
+
+#packages td.col-10 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 30em;
+    overflow: hidden;
 }
 
 .cbi-tabmenu > li:hover {
@@ -2704,6 +2709,7 @@ input[name="nslookup"] {
 .node-main-login .main .main-right #maincontent {
 	height: 100%;
 	padding-top: 23vh;
+	padding-bottom:1rem;
 	margin-top: 0rem;
 	background-color: transparent !important;
 	text-align: center;
@@ -3175,9 +3181,10 @@ input[type="checkbox"] {
 	padding: 0;
 	cursor: pointer;
 	transition: all 0.2s;
+}
+div[id^="cbid."]>input[type="checkbox"]{
 	display:none;
 }
-
 .cbi-dropdown[open]>ul.dropdown>li label {
     margin-left: .5rem;
 }
@@ -3262,7 +3269,7 @@ input[type="checkbox"]:checked {
 
 	table {
 		font-size: 0.7rem !important;
-		width: 100% !important;
+		width: 100%;
 	}
 
 	.table .cbi-input-text {
@@ -3630,16 +3637,12 @@ input[type="checkbox"]:checked {
 	}
 }
 
-.waves-input-wrapper {
-	background-color: #475F7B;
-}
-
 .cbi-button,.btn {
-	background-color: #00CFDD;
+	background-color: #23bd70;
 }
 
 .cbi-button.reconnect {
-	background-color: #00CFDD !important;
+	background-color: #23bd70 !important;
 }
 
 .cpu .cbi-progressbar > div {
@@ -3955,8 +3958,22 @@ input,select {
 	background: none;
 }
 
+input:not([type=button]):not([type=submit]):not([type=checkbox]),select {
+	border:0 !important;
+	background-image:linear-gradient(dodgerblue,dodgerblue),linear-gradient(#a9a9a9,#a9a9a9);
+    background-size:0 2px,100% 1px;
+    background-position:left bottom,center calc(100% - 1px);
+    background-repeat:no-repeat;
+    transition: all .3s !important;
+}
+
+select:focus, input:not([type=button]):not([type=submit]):focus {
+    background-size: 100% 2px,100% 1px;
+    transition: all .3s !important;
+}
+
 .btn,button,
-  .cbi-button,input[type=button],input[type=submit],input[type=reset],.waves-input-wrapper {
+  .cbi-button,input[type=button],input[type=submit],input[type=reset] {
 	height: auto !important;
 	width: auto !important;
 	padding: 0.6rem 1.6rem;
@@ -3967,15 +3984,12 @@ input,select {
 	transition: all .20s linear;
 	top: 0;
 	margin-left: 0.5rem;
+	position:relative;
 }
 
 .btn:first-child,button:first-child,
-  .cbi-button:first-child,input[type=button]:first-child,input[type=submit]:first-child,input[type=reset]:first-child,.waves-input-wrapper:first-child {
+  .cbi-button:first-child,input[type=button]:first-child,input[type=submit]:first-child,input[type=reset]:first-child {
 	margin-left: 0;
-}
-
-i.waves-input-wrapper {
-	padding: 0 !important;
 }
 
 i input {
@@ -4026,21 +4040,8 @@ ul.errors li {
 	min-width: 5rem !important;
 }
 
-#cbi-passwall .status .red, #cbi-passwall .status .green {
-	font-size: 0.83rem !important;
-	line-height: 2rem;
-}
-
-.waves-input-wrapper .waves-button-input {
-	line-height: 1rem;
-}
-
-.cbi-dropdown.waves-effect {
-	display: inline-flex;
-}
-
-#cbi-AdGuardHome-AdGuardHome .waves-input-wrapper>input {
-	color: #fff !important;
+#cbi-passwall .block h4 {
+	padding:0;
 }
 
 input[type=password]+.cbi-button.cbi-button-neutral {
@@ -4073,8 +4074,11 @@ div[id^="cbi-unblockmusic"] .cbi-button {
 	padding-left: 1.5rem;
 }
 
-.cbi-section-table .tr>.td:last-child,#packages .tr>.td:last-child{
+#packages .tr>.td:last-child{
 	padding-right:3%;
+}
+.cbi-section-table .tr>.td:last-child{
+	padding-right:2rem;
 }
 
 .command-output {
@@ -4117,4 +4121,21 @@ div[id^="cbi-unblockmusic"] .cbi-button {
 }
 table.interfaces .th{
 	padding:1.1em 0.5rem !important;
+}
+.cbi-value>.cbi-value-field>div:first-child+br{
+display:none;
+}
+
+.cbi-page-actions.control-group.fixed {
+    position: fixed;
+    bottom: 1.3rem;
+    right: 2rem;
+}
+
+#cbi-vssr+.cbi-page-actions.control-group.fixed {
+    bottom: 4.8rem;
+}
+
+#cbi-passwall+.cbi-page-actions.control-group.fixed {
+    bottom: 3.3rem;
 }

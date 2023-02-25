@@ -1,6 +1,6 @@
 -- This is a free software, use it under GNU General Public License v3.0.
--- Created By [CTCGFW]Project OpenWRT
--- https://github.com/project-openwrt
+-- Created By ImmortalWrt
+-- https://github.com/immortalwrt
 
 module("luci.controller.gost", package.seeall)
 
@@ -12,6 +12,7 @@ function index()
 	local page
 	page = entry({"admin", "services", "gost"}, cbi("gost"), _("Gost"), 100)
 	page.dependent = true
+	page.acl_depends = { "luci-app-gost" }
 	entry({"admin", "services", "gost", "status"},call("act_status")).leaf=true
 end
 

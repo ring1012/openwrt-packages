@@ -1,5 +1,10 @@
-local uci = require"luci.model.uci".cursor()
-local appname = "passwall"
+local api = require "luci.passwall.api"
+local appname = api.appname
+local fs = api.fs
+local has_v2ray = api.is_finded("v2ray")
+local has_xray = api.is_finded("xray")
+local has_fw3 = api.is_finded("fw3")
+local has_fw4 = api.is_finded("fw4")
 
 m = Map(appname)
 
@@ -28,21 +33,21 @@ o.rmempty = false
 ---- Automatically turn off time
 o = s:option(ListValue, "time_off", translate("Automatically turn off time"))
 o.default = nil
-o:depends("auto_on", "1")
+o:depends("auto_on", true)
 o:value(nil, translate("Disable"))
 for e = 0, 23 do o:value(e, e .. translate("oclock")) end
 
 ---- Automatically turn on time
 o = s:option(ListValue, "time_on", translate("Automatically turn on time"))
 o.default = nil
-o:depends("auto_on", "1")
+o:depends("auto_on", true)
 o:value(nil, translate("Disable"))
 for e = 0, 23 do o:value(e, e .. translate("oclock")) end
 
 ---- Automatically restart time
 o = s:option(ListValue, "time_restart", translate("Automatically restart time"))
 o.default = nil
-o:depends("auto_on", "1")
+o:depends("auto_on", true)
 o:value(nil, translate("Disable"))
 for e = 0, 23 do o:value(e, e .. translate("oclock")) end
 --]]
@@ -68,14 +73,23 @@ o.default = "disable"
 o:value("disable", translate("No patterns are used"))
 o:value("1:65535", translate("All"))
 
+---- TCP Proxy Drop Ports
+o = s:option(Value, "tcp_proxy_drop_ports", translate("TCP Proxy Drop Ports"))
+o.default = "disable"
+o:value("disable", translate("No patterns are used"))
+
+---- UDP Proxy Drop Ports
+o = s:option(Value, "udp_proxy_drop_ports", translate("UDP Proxy Drop Ports"))
+o.default = "80,443"
+o:value("disable", translate("No patterns are used"))
+o:value("80,443", translate("QUIC"))
+
 ---- TCP Redir Ports
 o = s:option(Value, "tcp_redir_ports", translate("TCP Redir Ports"))
-o.default = "22,25,53,143,465,587,993,995,80,443"
+o.default = "22,25,53,143,465,587,853,993,995,80,443"
 o:value("1:65535", translate("All"))
-o:value("22,25,53,143,465,587,993,995,80,443", translate("Common Use"))
+o:value("22,25,53,143,465,587,853,993,995,80,443", translate("Common Use"))
 o:value("80,443", translate("Only Web"))
-o:value("80:65535", "80 " .. translate("or more"))
-o:value("1:443", "443 " .. translate("or less"))
 
 ---- UDP Redir Ports
 o = s:option(Value, "udp_redir_ports", translate("UDP Redir Ports"))
@@ -83,70 +97,75 @@ o.default = "1:65535"
 o:value("1:65535", translate("All"))
 o:value("53", "DNS")
 
----- Multi SS/SSR Process Option
-o = s:option(Value, "process", translate("Multi Process Option"))
+---- Use nftables
+o = s:option(ListValue, "use_nft", translate("Firewall tools"))
 o.default = "0"
-o.rmempty = false
-o:value("0", translate("Auto"))
-o:value("1", translate("1 Process"))
-o:value("2", "2 " .. translate("Process"))
-o:value("3", "3 " .. translate("Process"))
-o:value("4", "4 " .. translate("Process"))
+if has_fw3 then
+    o:value("0", "IPtables")
+end
+if has_fw4 then
+    o:value("1", "NFtables")
+end
 
---[[
----- Proxy IPv6
-o = s:option(Flag, "proxy_ipv6", translate("Proxy IPv6"),
-             translate("The IPv6 traffic can be proxyed when selected"))
+if (os.execute("lsmod | grep -i REDIRECT >/dev/null") == 0 and os.execute("lsmod | grep -i TPROXY >/dev/null") == 0) or (os.execute("lsmod | grep -i nft_redir >/dev/null") == 0 and os.execute("lsmod | grep -i nft_tproxy >/dev/null") == 0) then
+    o = s:option(ListValue, "tcp_proxy_way", translate("TCP Proxy Way"))
+    o.default = "redirect"
+    o:value("redirect", "REDIRECT")
+    o:value("tproxy", "TPROXY")
+    o:depends("ipv6_tproxy", false)
+
+    o = s:option(ListValue, "_tcp_proxy_way", translate("TCP Proxy Way"))
+    o.default = "tproxy"
+    o:value("tproxy", "TPROXY")
+    o:depends("ipv6_tproxy", true)
+    o.write = function(self, section, value)
+        return self.map:set(section, "tcp_proxy_way", value)
+    end
+
+    if os.execute("lsmod | grep -i ip6table_mangle >/dev/null") == 0 or os.execute("lsmod | grep -i nft_tproxy >/dev/null") == 0 then
+        ---- IPv6 TProxy
+        o = s:option(Flag, "ipv6_tproxy", translate("IPv6 TProxy"),
+                    "<font color='red'>" .. translate(
+                        "Experimental feature. Make sure that your node supports IPv6.") ..
+                        "</font>")
+        o.default = 0
+        o.rmempty = false
+    end
+end
+
+o = s:option(Flag, "accept_icmp", translate("Hijacking ICMP (PING)"))
 o.default = 0
---]]
 
---[[
----- TCP Redir Port
-o = s:option(Value, "tcp_redir_port", translate("TCP Redir Port"))
-o.datatype = "port"
-o.default = 1041
-o.rmempty = true
+o = s:option(Flag, "accept_icmpv6", translate("Hijacking ICMPv6 (IPv6 PING)"))
+o:depends("ipv6_tproxy", true)
+o.default = 0
 
----- UDP Redir Port
-o = s:option(Value, "udp_redir_port", translate("UDP Redir Port"))
-o.datatype = "port"
-o.default = 1051
-o.rmempty = true
+if has_v2ray or has_xray then
+    o = s:option(Flag, "sniffing", translate("Sniffing (V2Ray/Xray)"), translate("When using the V2ray/Xray shunt, must be enabled, otherwise the shunt will invalid."))
+    o.default = 1
+    o.rmempty = false
 
----- Kcptun Port
-o = s:option(Value, "kcptun_port", translate("Kcptun Port"))
-o.datatype = "port"
-o.default = 12948
-o.rmempty = true
---]]
+    if has_xray then
+        route_only = s:option(Flag, "route_only", translate("Sniffing Route Only (Xray)"), translate("When enabled, the server not will resolve the domain name again."))
+        route_only.default = 0
+        route_only:depends("sniffing", true)
 
--- [[ Other Settings ]]--
-s = m:section(TypedSection, "global_other", translate("Other Settings"),
-              "<font color='red'>" .. translatef(
-                  "You can only set up a maximum of %s nodes for the time being, Used for access control.",
-                  "3") .. "</font>")
-s.anonymous = true
-s.addremove = false
+        local domains_excluded = string.format("/usr/share/%s/rules/domains_excluded", appname)
+        o = s:option(TextValue, "no_sniffing_hosts", translate("No Sniffing Lists"), translate("Hosts added into No Sniffing Lists will not resolve again on server (Xray only)."))
+        o.rows = 15
+        o.wrap = "off"
+        o.cfgvalue = function(self, section) return fs.readfile(domains_excluded) or "" end
+        o.write = function(self, section, value) fs.writefile(domains_excluded, value:gsub("\r\n", "\n")) end
+        o.remove = function(self, section, value)
+            if route_only:formvalue(section) == "0" then
+                fs.writefile(domains_excluded, "")
+            end
+        end
+        o:depends({sniffing = true, route_only = false})
 
----- TCP Node Number Option
-o = s:option(ListValue, "tcp_node_num", "TCP" .. translate("Node Number"))
-o.default = "1"
-o.rmempty = false
-o:value("1")
-o:value("2")
-o:value("3")
-
----- UDP Node Number Option
-o = s:option(ListValue, "udp_node_num", "UDP" .. translate("Node Number"))
-o.default = "1"
-o.rmempty = false
-o:value("1")
-o:value("2")
-o:value("3")
-
-o = s:option(MultiValue, "status", translate("Status info"))
-o:value("big_icon", translate("Big icon")) -- 大图标
-o:value("show_check_port", translate("Show node check")) -- 显示节点检测
-o:value("show_ip111", translate("Show Show IP111")) -- 显示IP111
-
+        o = s:option(Value, "buffer_size", translate("Buffer Size (Xray)"), translate("Buffer size for every connection (kB)"))
+        o.rmempty = true
+        o.datatype = "uinteger"
+    end
+end
 return m

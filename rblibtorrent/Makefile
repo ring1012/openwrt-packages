@@ -1,30 +1,31 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=rblibtorrent
-PKG_VERSION:=1.2.11
+PKG_VERSION:=1.2.17
 PKG_RELEASE=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL:=https://github.com/arvidn/libtorrent.git
 PKG_SOURCE_SUBDIR:=$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE_VERSION:=471e772cb7038f1bf5f44c32a09eb42fbb80ee99
+PKG_SOURCE_VERSION:=2d34455ad2b828d3da23634f7de93fafded5442d
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_MIRROR_HASH:=skip
 
 PKG_LICENSE:=BSD
 PKG_LICENSE_FILES:=COPYING
 
 PKG_USE_MIPS16:=0
 PKG_BUILD_PARALLEL:=1
-PKG_INSTALL:=1
 
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/cmake.mk
 
 define Package/rblibtorrent
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE:=Rasterbar BitTorrent library
   URL:=https://www.libtorrent.org/
-  DEPENDS:=+libstdcpp +libopenssl +boost +boost-system +boost-chrono +boost-random
+  DEPENDS:=+libgcc +libstdcpp +libopenssl +boost +boost-system +boost-chrono +boost-random +libatomic
   MAINTAINER:=Arvid Norberg <arvid@libtorrent.org>
 endef
 
@@ -34,41 +35,28 @@ all the other bittorrent implementations around. It is a library and not a
 full featured client, although it comes with a working example client.
 endef
 
-TARGET_CFLAGS += $(if $(CONFIG_SOFT_FLOAT),-DBOOST_NO_FENV_H) -fPIC
+TARGET_CFLAGS += $(if $(CONFIG_SOFT_FLOAT),-DBOOST_NO_FENV_H) -fPIC -ffunction-sections -fdata-sections -flto
+EXTRA_CXXFLAGS += $(if $(CONFIG_GCC_VERSION_4_8),-std=gnu++11,-std=gnu++17) 
+TARGET_LDFLAGS += -lstdc++ -Wl,--gc-sections,--as-needed -flto
 
-EXTRA_CXXFLAGS += $(if $(CONFIG_GCC_VERSION_4_8),-std=gnu++11,-std=gnu++14)
-
-TARGET_LDFLAGS += -lstdc++
-
-CONFIGURE_ARGS += \
-	--disable-debug \
-	--disable-rpath \
-	--enable-encryption \
-	--enable-deprecated-functions \
-	--with-gnu-ld \
-	--with-openssl=$(STAGING_DIR)/usr \
-	--with-boost=$(STAGING_DIR)/usr \
-	--with-libiconv \
-	--with-libiconv-prefix=$(ICONV_PREFIX)
-
-define Build/Configure
-	cd $(PKG_BUILD_DIR) ; \
-		sh autotool.sh
-	$(call Build/Configure/Default)
-endef
-
+CMAKE_OPTIONS += \
+	-DCMAKE_BUILD_TYPE=Release \
+	-DCMAKE_CXX_STANDARD=17 \
+	-DBUILD_SHARED_LIBS=ON \
+	-Ddeprecated-functions=ON  \
+	-Dencryption=ON \
+	-Diconv=ON \
+	-Dstatic_runtime=ON \
+	-Dlogging=OFF
+	
 define Build/InstallDev
-	$(INSTALL_DIR) $(1)/usr/include
-	$(CP) $(PKG_INSTALL_DIR)/usr/include/libtorrent $(1)/usr/include/
-	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libtorrent-rasterbar.{a,so*} $(1)/usr/lib/
-	$(INSTALL_DIR) $(1)/usr/lib/pkgconfig
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/libtorrent-rasterbar.pc $(1)/usr/lib/pkgconfig/
+	$(INSTALL_DIR) $(1)
+	$(CP) $(PKG_INSTALL_DIR)/* $(1)
 endef
 
 define Package/rblibtorrent/install
 	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libtorrent-rasterbar.so.* $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/*.so* $(1)/usr/lib
 endef
 
 $(eval $(call BuildPackage,rblibtorrent))

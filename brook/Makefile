@@ -1,79 +1,44 @@
-# Copyright (C) 2020 xiaorouji
+# SPDX-License-Identifier: GPL-3.0-only
 #
-# This is free software, licensed under the GNU General Public License v3.
-#
+# Copyright (C) 2021 ImmortalWrt.org
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=brook
-PKG_VERSION:=20210101
-PKG_RELEASE:=1
+PKG_VERSION:=20230122
+PKG_RELEASE:=38
 
-ifeq ($(ARCH),i386)
-	PKG_ARCH:=386
-endif
-ifeq ($(ARCH),x86_64)
-	PKG_ARCH:=amd64
-endif
-ifeq ($(ARCH),mipsel)
-	PKG_ARCH:=mipsle
-endif
-ifeq ($(ARCH),mips)
-	PKG_ARCH:=mips
-endif
-ifeq ($(ARCH),arm)
-	PKG_ARCH:=arm7
-endif
-ifeq ($(BOARD),bcm53xx)
-	PKG_ARCH:=arm6
-endif
-ifeq ($(BOARD),kirkwood)
-	PKG_ARCH:=arm5
-endif
-ifeq ($(ARCH),arm64)
-	PKG_ARCH:=arm64
-endif
-ifeq ($(ARCH),aarch64)
-	PKG_ARCH:=arm64
-endif
-
-PKG_FILE:=$(PKG_NAME)_$(PKG_VERSION)_$(PKG_ARCH)
-PKG_URL:=https://github.com/txthinking/brook/releases/download/v$(PKG_VERSION)/$(PKG_NAME)_linux_$(PKG_ARCH)
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)/$(PKG_VERSION)
+PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
+PKG_SOURCE_URL:=https://codeload.github.com/txthinking/brook/tar.gz/v$(PKG_VERSION)?
 PKG_HASH:=skip
 
+PKG_MAINTAINER:=Tianling Shen <cnsztl@immortalwrt.org>
+PKG_LICENSE:=GPL-3.0
+PKG_LICENSE_FILES:=LICENSE
+
+PKG_BUILD_DEPENDS:=golang/host
+PKG_BUILD_PARALLEL:=1
+PKG_USE_MIPS16:=0
+
+GO_PKG:=github.com/txthinking/brook
+GO_PKG_BUILD_PKG:=$(GO_PKG)/cli/brook
+
 include $(INCLUDE_DIR)/package.mk
+include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
-define Package/$(PKG_NAME)
-	SECTION:=net
-	CATEGORY:=Network
-	TITLE:=Brook is a cross-platform proxy software
-	DEPENDS:=
-	URL:=https://github.com/txthinking/brook
+define Package/brook
+  SECTION:=net
+  CATEGORY:=Network
+  SUBMENU:=Web Servers/Proxies
+  TITLE:=A cross-platform proxy software
+  DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle
+  URL:=https://github.com/txthinking/brook
 endef
 
-define Package/$(PKG_NAME)/description
-  Brook is a cross-platform proxy software
+define Package/brook/description
+  Brook is a cross-platform strong encryption and not detectable proxy.
+  Zero-Configuration.
 endef
 
-define Build/Prepare
-	if [ ! -f $(DL_DIR)/$(PKG_FILE) ] ; then \
-		curl -f --connect-timeout 20 --retry 5 --location --insecure $(PKG_URL) -o $(DL_DIR)/$(PKG_FILE); \
-	fi
-	rm -r $(PKG_BUILD_DIR)
-	mkdir -p $(PKG_BUILD_DIR)
-	cp -f $(DL_DIR)/$(PKG_FILE) $(PKG_BUILD_DIR)/$(PKG_NAME)
-endef
-
-define Build/Configure
-endef
-
-define Build/Compile
-endef
-
-define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/usr/bin
-	$(INSTALL_BIN) $(PKG_BUILD_DIR)/$(PKG_NAME) $(1)/usr/bin/brook
-endef
-
-$(eval $(call BuildPackage,$(PKG_NAME)))
+$(eval $(call GoBinPackage,brook))
+$(eval $(call BuildPackage,brook))

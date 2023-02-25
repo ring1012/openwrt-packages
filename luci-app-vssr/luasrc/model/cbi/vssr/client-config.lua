@@ -129,13 +129,18 @@ o:value('ssr', translate('ShadowsocksR'))
 if nixio.fs.access('/usr/bin/ss-redir') then
     o:value('ss', translate('Shadowsocks New Version'))
 end
-if nixio.fs.access('/usr/bin/v2ray/v2ray') or nixio.fs.access('/usr/bin/v2ray') or nixio.fs.access('/usr/bin/xray') or nixio.fs.access('/usr/bin/xray/xray') then
+
+if nixio.fs.access('/usr/bin/xray') then
     o:value('v2ray', translate('V2Ray'))
     o:value('vless', translate('VLESS'))
 end
 
 if nixio.fs.access('/usr/sbin/trojan') then
     o:value('trojan', translate('Trojan'))
+end
+
+if nixio.fs.access('/usr/bin/hysteria') then
+    o:value('hysteria', translate('Hysteria'))
 end
 
 o.description = translate('Using incorrect encryption mothod may causes service fail to start')
@@ -179,6 +184,37 @@ for _, v in ipairs(encrypt_methods_ss) do
 end
 o.rmempty = true
 o:depends('type', 'ss')
+
+-- o:depends("type", "hysteria")
+o = s:option(Value, 'h_obfs', translate('Hysteria Obfs'))
+o.datatype = "minlength(1)"
+o.rmempty = false
+o:depends('type', 'hysteria')
+
+-- 协议
+o = s:option(ListValue, 'h_protocol', translate('Protocol'))
+o:value('udp', 'UDP')
+o:value('wechat-video', 'Wechat Video')
+o:value('faketcp', 'Fake TCP')
+o.rmempty = false
+o:depends('type', 'hysteria')
+
+-- up_mbps
+o = s:option(Value, 'h_up_mbps', translate('Up Mbps'))
+o.datatype = "uinteger"
+o.rmempty = false
+o:depends('type', 'hysteria')
+
+-- down_mbps
+o = s:option(Value, 'h_down_mbps', translate('Down Mbps'))
+o.datatype = "uinteger"
+o.rmempty = false
+o:depends('type', 'hysteria')
+
+o = s:option(Value, 'h_server_name', translate('Server Name'))
+o.datatype = 'host'
+o.rmempty = true
+o:depends('type', 'hysteria')
 
 -- Shadowsocks Plugin
 o = s:option(Value, 'plugin', translate('Plugin'))
@@ -380,13 +416,13 @@ o:depends('type', 'v2ray')
 o:depends('type', 'trojan')
 o:depends('type', 'vless')
 o:depends('type', 'xray')
+o:depends('type', 'hysteria')
 
 -- [[ TLS ]]--
 o = s:option(Flag, 'tls', translate('TLS'))
 o.rmempty = true
 o.default = '0'
 o:depends('type', 'v2ray')
-o:depends('type', 'trojan')
 o:depends('type', 'vless')
 o:depends('type', 'xray')
 
@@ -403,12 +439,12 @@ o:depends({type = 'vless', tls = '1'})
 o:depends({type = 'xray', tls = '1'})
 
 -- Flow
-o = s:option(Value, 'vless_flow', translate('Flow'))
+o = s:option(ListValue, 'vless_flow', translate('Flow'))
 for _, v in ipairs(flows) do
     o:value(v, v)
 end
 o.rmempty = true
-o.default = 'xtls-rprx-origin'
+o.default = 'xtls-rprx-splice'
 o:depends('xtls', '1')
 
 -- [[ Mux ]]--

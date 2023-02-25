@@ -17,13 +17,11 @@ require("luci.sys")
 module("luci.controller.usb_printer", package.seeall)
 
 function index()
+	entry({"admin", "nas"}, firstchild(), _("NAS") , 45).dependent = false
 	if not nixio.fs.access("/etc/config/usb_printer") then
 		return
 	end
 	
-  entry({"admin", "nas"}, firstchild(), "NAS", 44).dependent = false
-	
-	local page
-
-	page = entry({"admin", "nas", "usb_printer"}, cbi("usb_printer"), _("USB Printer Server"), 50)
+	entry({"admin", "nas"}, firstchild(), "NAS", 44).dependent = false
+	entry({"admin", "nas", "usb_printer"}, cbi("usb_printer"), _("USB Printer Server"), 50)
 end

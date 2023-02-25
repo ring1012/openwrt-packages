@@ -1,151 +1,169 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-ssr-plus
-PKG_VERSION:=1.2
-PKG_RELEASE:=27
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
+PKG_CONFIG_DEPENDS:= \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_NONE_V2RAY \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_V2ray \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Xray \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_SagerNet_Core \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ChinaDNS_NG \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Hysteria \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_IPT2Socks \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Redsocks2 \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_NONE_Client \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Client \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Client \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_NONE_Server \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Server \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Server \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Simple_Obfs \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_V2ray_Plugin \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Client \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Server \
+	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Trojan
 
-include $(INCLUDE_DIR)/package.mk
+LUCI_TITLE:=SS/SSR/V2Ray/Trojan/NaiveProxy/Socks5/Tun LuCI interface
+LUCI_PKGARCH:=all
+LUCI_DEPENDS:= \
+	@(PACKAGE_libustream-mbedtls||PACKAGE_libustream-openssl||PACKAGE_libustream-wolfssl) \
+	+coreutils +coreutils-base64 +dns2socks +dns2tcp +dnsmasq-full +@PACKAGE_dnsmasq_full_ipset +ipset +kmod-ipt-nat \
+	+ip-full +iptables +iptables-mod-tproxy +lua +lua-neturl +libuci-lua +microsocks \
+	+tcping +resolveip +shadowsocksr-libev-ssr-check +uclient-fetch \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_V2ray:curl \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_V2ray:v2ray-core \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Xray:curl \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Xray:xray-core \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_SagerNet_Core:curl \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_SagerNet_Core:sagernet-core \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_ChinaDNS_NG:chinadns-ng \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Hysteria:hysteria \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_IPT2Socks:ipt2socks \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun:kcptun-client \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy:naiveproxy \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Redsocks2:redsocks2 \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Client:shadowsocks-libev-ss-local \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Client:shadowsocks-libev-ss-redir \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Server:shadowsocks-libev-ss-server \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Client:shadowsocks-rust-sslocal \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Server:shadowsocks-rust-ssserver \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Simple_Obfs:simple-obfs \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_V2ray_Plugin:v2ray-plugin \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Client:shadowsocksr-libev-ssr-local \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Client:shadowsocksr-libev-ssr-redir \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Server:shadowsocksr-libev-ssr-server \
+	+PACKAGE_$(PKG_NAME)_INCLUDE_Trojan:trojan
 
 define Package/$(PKG_NAME)/config
-config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Server
-	bool "Include Shadowsocks Server"
+select PACKAGE_luci-lib-ipkg if PACKAGE_$(PKG_NAME)
+
+choice
+	prompt "Shadowsocks Client Selection"
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Client if aarch64
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Client
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_NONE_Client
+	bool "None"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Client
+	bool "Shadowsocks-libev"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Client
+	bool "Shadowsocks-rust"
+	depends on aarch64||arm||i386||mips||mipsel||x86_64
+	depends on !(TARGET_x86_geode||TARGET_x86_legacy)
+endchoice
+
+choice
+	prompt "Shadowsocks Server Selection"
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Server if aarch64
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Server if i386||x86_64||arm
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_NONE_Server
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_NONE_Server
+	bool "None"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Libev_Server
+	bool "Shadowsocks-libev"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Rust_Server
+	bool "Shadowsocks-rust"
+	depends on aarch64||arm||i386||mips||mipsel||x86_64
+	depends on !(TARGET_x86_geode||TARGET_x86_legacy)
+endchoice
+
+choice
+	prompt "V2ray-core Selection"
+	default PACKAGE_$(PKG_NAME)_INCLUDE_Xray
+	default PACKAGE_$(PKG_NAME)_INCLUDE_NONE_V2RAY
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_NONE_V2RAY
+	bool "None"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_V2ray
+	bool "V2ray-core"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_Xray
+	bool "Xray-core"
+
+	config PACKAGE_$(PKG_NAME)_INCLUDE_SagerNet_Core
+	bool "SagerNet-core (An enhanced edition of v2ray-core)"
+endchoice
+
+config PACKAGE_$(PKG_NAME)_INCLUDE_ChinaDNS_NG
+	bool "Include ChinaDNS-NG"
 	default y
 
-config PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server
-	bool "Include ShadowsocksR Server"
-	default y
+config PACKAGE_$(PKG_NAME)_INCLUDE_Hysteria
+	bool "Include Hysteria"
+	default n
 
-config PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs
-	bool "Include Shadowsocks Simple-obfs Plugin"
-	default y
-
-config PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs_server
-	bool "Include Shadowsocks Simple-obfs-server Plugin"
-	depends on PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Server
-	default y
-
-config PACKAGE_$(PKG_NAME)_INCLUDE_V2ray_plugin
-	bool "Include Shadowsocks V2ray Plugin"
-	default y if x86||x86_64||arm||aarch64
-
-config PACKAGE_$(PKG_NAME)_INCLUDE_V2ray
-	bool "Include V2ray"
-	default y if x86||x86_64||arm||aarch64
-
-config PACKAGE_$(PKG_NAME)_INCLUDE_Trojan
-	bool "Include Trojan"
-	default y
-
-config PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy
-	bool "Include NaiveProxy"
-	depends on !(arc||armeb||mips||mips64||powerpc)
+config PACKAGE_$(PKG_NAME)_INCLUDE_IPT2Socks
+	bool "Include IPT2Socks"
 	default n
 
 config PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun
 	bool "Include Kcptun"
-	default y if x86||x86_64||arm||aarch64
+	default n
 
-config PACKAGE_$(PKG_NAME)_INCLUDE_Socks5_Proxy
-	bool "Include Socks5 Transparent Proxy"
+config PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy
+	bool "Include NaiveProxy"
+	depends on !(arc||armeb||mips||mips64||powerpc||TARGET_gemini)
+	default n
+
+config PACKAGE_$(PKG_NAME)_INCLUDE_Redsocks2
+	bool "Include Redsocks2"
+	default n
+
+config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Simple_Obfs
+	bool "Include Shadowsocks Simple Obfs Plugin"
 	default y
 
-config PACKAGE_$(PKG_NAME)_INCLUDE_Socks_Server
-	bool "Include Socks Sever"
+config PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_V2ray_Plugin
+	bool "Include Shadowsocks V2ray Plugin"
+	default n
+
+config PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Client
+	bool "Include ShadowsocksR Libev Client"
 	default y
-endef
 
-PKG_CONFIG_DEPENDS:= \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Server \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs_server \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_V2ray_plugin \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_V2ray \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Trojan \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Trojan \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Socks5_Proxy \
-	CONFIG_PACKAGE_$(PKG_NAME)_INCLUDE_Socks_Server
+config PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Libev_Server
+	bool "Include ShadowsocksR Libev Server"
+	default y if i386||x86_64||arm
 
-define Package/$(PKG_NAME)
- 	SECTION:=luci
-	CATEGORY:=LuCI
-	SUBMENU:=3. Applications
-	TITLE:=SS/SSR/V2Ray LuCI interface
-	PKGARCH:=all
-	DEPENDS:=+ipset +ip-full +iptables-mod-tproxy +dnsmasq-full +smartdns +coreutils +coreutils-base64 +curl +tcping +chinadns-ng +lua +luci-compat \
-	+shadowsocks-libev-ss-redir +shadowsocks-libev-ss-local +shadowsocksr-libev-redir +shadowsocksr-libev-local \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Shadowsocks_Server:shadowsocks-libev-ss-server \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_ShadowsocksR_Server:shadowsocksr-libev-server \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs:simple-obfs \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Simple_obfs_server:simple-obfs-server \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_V2ray_plugin:v2ray-plugin \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_V2ray:v2ray \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Trojan:trojan \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Trojan:ipt2socks \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_NaiveProxy:naiveproxy \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Kcptun:kcptun-client \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Socks5_Proxy:redsocks2 \
-	+PACKAGE_$(PKG_NAME)_INCLUDE_Socks_Server:microsocks
-endef
-
-define Build/Prepare
-	$(foreach po,$(wildcard ${CURDIR}/po/zh_Hans/*.po), \
-		po2lmo $(po) $(PKG_BUILD_DIR)/$(patsubst %.po,%.zh-cn.lmo,$(notdir $(po)));)
-endef
-
-define Build/Compile
+config PACKAGE_$(PKG_NAME)_INCLUDE_Trojan
+	bool "Include Trojan"
+	select PACKAGE_$(PKG_NAME)_INCLUDE_IPT2Socks
+	default n
 endef
 
 define Package/$(PKG_NAME)/conffiles
 /etc/config/shadowsocksr
-/etc/ssr/
+/etc/ssrplus/
 endef
 
-define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/controller
-	$(INSTALL_DATA) ./luasrc/controller/* $(1)/usr/lib/lua/luci/controller/
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/model/cbi/shadowsocksr
-	$(INSTALL_DATA) ./luasrc/model/cbi/shadowsocksr/* $(1)/usr/lib/lua/luci/model/cbi/shadowsocksr/
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/view/shadowsocksr
-	$(INSTALL_DATA) ./luasrc/view/shadowsocksr/* $(1)/usr/lib/lua/luci/view/shadowsocksr/
-	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
-	$(INSTALL_DATA) $(PKG_BUILD_DIR)/ssr-plus.*.lmo $(1)/usr/lib/lua/luci/i18n/
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_DATA) ./root/etc/config/shadowsocksr $(1)/etc/config/shadowsocksr
-	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
-	$(INSTALL_BIN) ./root/etc/hotplug.d/iface/* $(1)/etc/hotplug.d/iface/
-	$(INSTALL_DIR) $(1)/etc/ssr
-	$(INSTALL_DATA) ./root/etc/ssr/* $(1)/etc/ssr/
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./root/etc/init.d/shadowsocksr $(1)/etc/init.d/shadowsocksr
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./root/etc/uci-defaults/luci-ssr-plus $(1)/etc/uci-defaults/luci-ssr-plus
-	$(INSTALL_DIR) $(1)/usr/share/ssrplus
-	$(INSTALL_BIN) ./root/usr/share/ssrplus/* $(1)/usr/share/ssrplus/
-	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
-	$(INSTALL_DATA) ./root/acl.d/* $(1)/usr/share/rpcd/acl.d/
-endef
+include $(TOPDIR)/feeds/luci/luci.mk
 
-define Package/$(PKG_NAME)/postinst
-#!/bin/sh
-if [ -z "$${IPKG_INSTROOT}" ]; then
-	/etc/init.d/shadowsocksr enable
-	/etc/uci-defaults/luci-ssr-plus && rm -f /etc/uci-defaults/luci-ssr-plus
-fi
-exit 0
-endef
-
-define Package/$(PKG_NAME)/prerm
-#!/bin/sh
-if [ -z "$${IPKG_INSTROOT}" ];then
-	/etc/init.d/shadowsocksr disable
-	/etc/init.d/shadowsocksr stop
-fi
-exit 0
-endef
-
-$(eval $(call BuildPackage,$(PKG_NAME)))
+# call BuildPackage - OpenWrt buildroot signature

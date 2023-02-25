@@ -1,31 +1,33 @@
-local d = require "luci.dispatcher"
-local uci = require"luci.model.uci".cursor()
-local api = require "luci.model.cbi.passwall.api.api"
-local appname = "passwall"
+local api = require "luci.passwall.api"
+local appname = api.appname
+local uci = api.uci
+local datatypes = api.datatypes
+local has_v2ray = api.is_finded("v2ray")
+local has_xray = api.is_finded("xray")
+local has_chnlist = api.fs.access("/usr/share/passwall/rules/chnlist")
+
+m = Map(appname)
 
 local nodes_table = {}
 for k, e in ipairs(api.get_valid_nodes()) do
-    nodes_table[#nodes_table + 1] = {
-        id = e[".name"],
-        remarks = e.remarks_name
-    }
+    nodes_table[#nodes_table + 1] = e
 end
 
+local tcp_socks_server = "127.0.0.1" .. ":" .. (uci:get(appname, "@global[0]", "tcp_node_socks_port") or "1070")
 local socks_table = {}
+socks_table[#socks_table + 1] = {
+    id = tcp_socks_server,
+    remarks = tcp_socks_server .. " - " .. translate("TCP Node")
+}
 uci:foreach(appname, "socks", function(s)
     if s.enabled == "1" and s.node then
         local id, remarks
-        local same, i = s.node:match("^(tcp)([1-9])$")
-        if same then
-            remarks = translatef("Same as the tcp %s node", i)
-        else
-            for k, n in pairs(nodes_table) do
-                if (s.node == n.id) then
-                    remarks = n.remarks; break
-                end
+        for k, n in pairs(nodes_table) do
+            if (s.node == n.id) then
+                remarks = n["remark"]; break
             end
         end
-        id = "0.0.0.0" .. ":" .. s.port
+        id = "127.0.0.1" .. ":" .. s.port
         socks_table[#socks_table + 1] = {
             id = id,
             remarks = id .. " - " .. (remarks or translate("Misconfigured"))
@@ -35,6 +37,7 @@ end)
 
 local doh_validate = function(self, value, t)
     if value ~= "" then
+        value = api.trim(value)
         local flag = 0
         local util = require "luci.util"
         local val = util.split(value, ",")
@@ -55,13 +58,21 @@ local doh_validate = function(self, value, t)
     return nil, translate("DoH request address") .. " " .. translate("Format must be:") .. " URL,IP"
 end
 
-m = Map(appname)
-local status = m:get("@global_other[0]", "status") or ""
-if status:find("big_icon") then
-    m:append(Template(appname .. "/global/status"))
-else
-    m:append(Template(appname .. "/global/status2"))
+local redir_mode_validate = function(self, value, t)
+    local tcp_proxy_mode_v = tcp_proxy_mode:formvalue(t) or ""
+    local udp_proxy_mode_v = udp_proxy_mode:formvalue(t) or ""
+    local localhost_tcp_proxy_mode_v = localhost_tcp_proxy_mode:formvalue(t) or ""
+    local localhost_udp_proxy_mode_v = localhost_udp_proxy_mode:formvalue(t) or ""
+    local s = tcp_proxy_mode_v .. udp_proxy_mode_v .. localhost_tcp_proxy_mode_v .. localhost_udp_proxy_mode_v
+    if s:find("returnhome") then
+        if s:find("chnroute") or s:find("gfwlist") then
+            return nil, translate("China list or gfwlist cannot be used together with outside China list!")
+        end
+    end
+    return value
 end
+
+m:append(Template(appname .. "/global/status"))
 
 s = m:section(TypedSection, "global")
 s.anonymous = true
@@ -74,142 +85,142 @@ o = s:taboption("Main", Flag, "enabled", translate("Main switch"))
 o.rmempty = false
 
 ---- TCP Node
-local tcp_node_num = tonumber(m:get("@global_other[0]", "tcp_node_num") or 1)
-for i = 1, tcp_node_num, 1 do
-    o = s:taboption("Main", ListValue, "tcp_node" .. i, translate("TCP Node") .. " " .. i)
-    if i == 1 then
-        o.title = translate("TCP Node")
-        o.description = ""
-        --o.description = translate("For proxy specific list.")
-        --o.description = o.description .. "<br />"
-        local current_node = luci.sys.exec(string.format("[ -f '/var/etc/%s/id/TCP_%s' ] && echo -n $(cat /var/etc/%s/id/TCP_%s)", appname, i, appname, i))
-        if current_node and current_node ~= "" and current_node ~= "nil" then
-            local n = uci:get_all(appname, current_node)
-            if n then
-                if tonumber(m:get("@auto_switch[0]", "enable") or 0) == 1 then
-                    local remarks = api.get_full_node_remarks(n)
-                    local url = d.build_url("admin", "services", appname, "node_config", current_node)
-                    o.description = o.description .. translatef("Current node: %s", string.format('<a href="%s">%s</a>', url, remarks)) .. "<br />"
-                end
-                if n.protocol and n.protocol == "_shunt" then
-                    uci:foreach(appname, "shunt_rules", function(e)
-                        local id = e[".name"]
-                        local remarks = translate(e.remarks)
-                        if n[id] and n[id] ~= "nil" then
-                            local url = d.build_url("admin", "services", appname, "node_config", n[id])
-                            local r = api.get_full_node_remarks(uci:get_all(appname, n[id]))
-                            o.description = o.description .. remarks .. "：" .. string.format('<a href="%s">%s</a>', url, r) .. "<br />"
-                        end
-                    end)
-                    local id = "default_node"
-                    local remarks = translate("Default")
-                    if n[id] and n[id] ~= "nil" then
-                        local url = d.build_url("admin", "services", appname, "node_config", n[id])
-                        local r = api.get_full_node_remarks(uci:get_all(appname, n[id]))
-                         o.description = o.description .. remarks .. "：" .. string.format('<a href="%s">%s</a>', url, r) .. "<br />"
-                    end
-                end
-            end
+tcp_node = s:taboption("Main", ListValue, "tcp_node", "<a style='color: red'>" .. translate("TCP Node") .. "</a>")
+tcp_node.description = ""
+local current_node = luci.sys.exec(string.format("[ -f '/tmp/etc/%s/id/TCP' ] && echo -n $(cat /tmp/etc/%s/id/TCP)", appname, appname))
+if current_node and current_node ~= "" and current_node ~= "nil" then
+    local n = uci:get_all(appname, current_node)
+    if n then
+        if tonumber(m:get("@auto_switch[0]", "enable") or 0) == 1 then
+            local remarks = api.get_full_node_remarks(n)
+            local url = api.url("node_config", current_node)
+            tcp_node.description = tcp_node.description .. translatef("Current node: %s", string.format('<a href="%s">%s</a>', url, remarks)) .. "<br />"
         end
     end
-    o:value("nil", translate("Close"))
-    for k, v in pairs(nodes_table) do o:value(v.id, v.remarks) end
+end
+tcp_node:value("nil", translate("Close"))
+
+-- 分流
+if (has_v2ray or has_xray) and #nodes_table > 0 then
+    local normal_list = {}
+    local shunt_list = {}
+    for k, v in pairs(nodes_table) do
+        if v.node_type == "normal" then
+            normal_list[#normal_list + 1] = v
+        end
+        if v.protocol and v.protocol == "_shunt" then
+            shunt_list[#shunt_list + 1] = v
+        end
+    end
+    for k, v in pairs(shunt_list) do
+        uci:foreach(appname, "shunt_rules", function(e)
+            local id = e[".name"]
+            if id and e.remarks then
+                o = s:taboption("Main", ListValue, v.id .. "." .. id .. "_node", string.format('* <a href="%s" target="_blank">%s</a>', api.url("shunt_rules", id), e.remarks))
+                o:depends("tcp_node", v.id)
+                o:value("nil", translate("Close"))
+                o:value("_default", translate("Default"))
+                o:value("_direct", translate("Direct Connection"))
+                o:value("_blackhole", translate("Blackhole"))
+                for k1, v1 in pairs(normal_list) do
+                    o:value(v1.id, v1["remark"])
+                end
+                o.cfgvalue = function(self, section)
+                    return m:get(v.id, id) or "nil"
+                end
+                o.write = function(self, section, value)
+                    m:set(v.id, id, value)
+                end
+            end
+        end)
+
+        local id = "default_node"
+        o = s:taboption("Main", ListValue, v.id .. "." .. id, string.format('* <a style="color:red">%s</a>', translate("Default")))
+        o:depends("tcp_node", v.id)
+        o:value("_direct", translate("Direct Connection"))
+        o:value("_blackhole", translate("Blackhole"))
+        for k1, v1 in pairs(normal_list) do
+            o:value(v1.id, v1["remark"])
+        end
+        o.cfgvalue = function(self, section)
+            return m:get(v.id, id) or "nil"
+        end
+        o.write = function(self, section, value)
+            m:set(v.id, id, value)
+        end
+        
+        local id = "main_node"
+        o = s:taboption("Main", ListValue, v.id .. "." .. id, string.format('* <a style="color:red">%s</a>', translate("Default Preproxy")), translate("When using, localhost will connect this node first and then use this node to connect the default node."))
+        o:depends("tcp_node", v.id)
+        o:value("nil", translate("Close"))
+        for k1, v1 in pairs(normal_list) do
+            o:value(v1.id, v1["remark"])
+        end
+        o.cfgvalue = function(self, section)
+            return m:get(v.id, id) or "nil"
+        end
+        o.write = function(self, section, value)
+            m:set(v.id, id, value)
+        end
+    end
 end
 
----- UDP Node
-local udp_node_num = tonumber(m:get("@global_other[0]", "udp_node_num") or 1)
-for i = 1, udp_node_num, 1 do
-    o = s:taboption("Main", ListValue, "udp_node" .. i, translate("UDP Node") .. " " .. i)
-    o:value("nil", translate("Close"))
-    if i == 1 then
-        o.title = translate("UDP Node")
-        --o.description = translate("For proxy game network, DNS hijack etc.") .. "<br />" .. translate("The selected server will not use Kcptun.")
-        o:value("tcp_", translate("Same as the tcp node"))
-        --o:value("tcp", translate("Same as the tcp node"))
-        --o:value("tcp_", translate("Same as the tcp node") .. "（" .. translate("New process") .. "）")
-    end
-    for k, v in pairs(nodes_table) do o:value(v.id, v.remarks) end
+udp_node = s:taboption("Main", ListValue, "udp_node", "<a style='color: red'>" .. translate("UDP Node") .. "</a>")
+udp_node:value("nil", translate("Close"))
+udp_node:value("tcp", translate("Same as the tcp node"))
+
+tcp_node_socks_port = s:taboption("Main", Value, "tcp_node_socks_port", translate("TCP Node") .. " Socks " .. translate("Listen Port"))
+tcp_node_socks_port.default = 1070
+tcp_node_socks_port.datatype = "port"
+
+--[[
+if has_v2ray or has_xray then
+    tcp_node_http_port = s:taboption("Main", Value, "tcp_node_http_port", translate("TCP Node") .. " HTTP " .. translate("Listen Port") .. " " .. translate("0 is not use"))
+    tcp_node_http_port.default = 0
+    tcp_node_http_port.datatype = "port"
 end
+]]--
+
 
 s:tab("DNS", translate("DNS"))
 
-if api.is_finded("chinadns-ng") then
-    o = s:taboption("DNS", Flag, "chinadns_ng", translate("Use ChinaDNS-NG"), translate("When checked, forced to be set to dnsmasq upstream DNS."))
-    o.default = "0"
-
-    o = s:taboption("DNS", Flag, "fair_mode", translate("ChinaDNS-NG Fair Mode"))
-    o.default = "1"
-    o:depends("chinadns_ng", "1")
-end
-
-o = s:taboption("DNS", Value, "up_china_dns", translate("Resolver For Local/WhiteList Domains") .. "(UDP)")
-o.description = translate("IP:Port mode acceptable, multi value split with english comma.") .. "<br />" .. translate("When the selection is not the default, this DNS is forced to be set to dnsmasq upstream DNS.")
-o.default = "default"
-o:value("default", translate("Default"))
-if api.is_finded("https-dns-proxy") then
-    o:value("https-dns-proxy", "https-dns-proxy(DoH)")
-end
-o:value("223.5.5.5", "223.5.5.5 (" .. translate("Ali") .. "DNS)")
-o:value("223.6.6.6", "223.6.6.6 (" .. translate("Ali") .. "DNS)")
-o:value("114.114.114.114", "114.114.114.114 (114DNS)")
-o:value("114.114.115.115", "114.114.115.115 (114DNS)")
-o:value("119.29.29.29", "119.29.29.29 (DNSPOD DNS)")
-o:value("182.254.116.116", "182.254.116.116 (DNSPOD DNS)")
-o:value("1.2.4.8", "1.2.4.8 (CNNIC DNS)")
-o:value("210.2.4.8", "210.2.4.8 (CNNIC DNS)")
-o:value("180.76.76.76", "180.76.76.76 (" .. translate("Baidu") .. "DNS)")
-
----- DoH
-o = s:taboption("DNS", Value, "up_china_dns_doh", translate("DoH request address"))
-o:value("https://dns.alidns.com/dns-query,223.5.5.5,223.6.6.6", "AliDNS")
-o:value("https://doh.pub/dns-query,119.29.29.29,119.28.28.28", "DNSPod")
-o.default = "https://dns.alidns.com/dns-query,223.5.5.5,223.6.6.6"
-o.validate = doh_validate
-o:depends("up_china_dns", "https-dns-proxy")
+o = s:taboption("DNS", Flag, "filter_proxy_ipv6", translate("Filter Proxy Host IPv6"), translate("Experimental feature."))
+o.default = "0"
 
 ---- DNS Forward Mode
-o = s:taboption("DNS", ListValue, "dns_mode", translate("Filter Mode"))
-o.rmempty = false
-o:reset_values()
-if api.is_finded("pdnsd") then
-    o:value("pdnsd", "pdnsd")
+dns_mode = s:taboption("DNS", ListValue, "dns_mode", translate("Filter Mode"))
+dns_mode.rmempty = false
+dns_mode:reset_values()
+if api.is_finded("dns2tcp") then
+    dns_mode:value("dns2tcp", translatef("Requery DNS By %s", "TCP"))
 end
 if api.is_finded("dns2socks") then
-    o:value("dns2socks", "dns2socks")
+    dns_mode:value("dns2socks", "dns2socks")
 end
-if api.is_finded("https-dns-proxy") then
-    o:value("https-dns-proxy", "https-dns-proxy(DoH)")
+if has_xray then
+    dns_mode:value("xray", "Xray")
 end
-o:value("udp", translatef("Requery DNS By %s", translate("UDP Node")))
-o:value("nonuse", translate("No Filter"))
-o:value("custom", translate("Custom DNS"))
+dns_mode:value("udp", translatef("Requery DNS By %s", "UDP"))
 
----- Custom DNS
-o = s:taboption("DNS", Value, "custom_dns", translate("Custom DNS"))
-o.default = "127.0.0.1#5353"
+o = s:taboption("DNS", ListValue, "v2ray_dns_mode", " ")
+o:value("tcp", "TCP")
+o:value("doh", "DoH")
+o:value("fakedns", "FakeDNS")
+o:depends("dns_mode", "xray")
 o.validate = function(self, value, t)
-    local v = string.gsub(value, "#", ":")
-    if not datatypes.ipaddrport(v) then
-        return nil, translate("Custom DNS") .. " " .. translate("Not valid IP format, please re-enter!")
+    if value == "fakedns" then
+        local _dns_mode = dns_mode:formvalue(t)
+        local _tcp_node = tcp_node:formvalue(t)
+        if m:get(_tcp_node, "type"):lower() ~= _dns_mode then
+            return nil, translatef("TCP node must be '%s' type to use FakeDNS.", _dns_mode)
+        end
     end
     return value
 end
-o:depends({dns_mode = "custom"})
-
-o = s:taboption("DNS", ListValue, "up_trust_pdnsd_dns", translate("Resolver For The List Proxied"))
--- o.description = translate("You can use other resolving DNS services as trusted DNS, Example: dns2socks, dns-forwarder... 127.0.0.1#5353<br />Only use two at most, english comma separation, If you do not fill in the # and the following port, you are using port 53.")
-o.default = "tcp"
-o:value("tcp", translatef("Requery DNS By %s", translate("TCP Node")))
-o:value("udp", translatef("Requery DNS By %s", translate("UDP Node")))
-o:depends("dns_mode", "pdnsd")
-
-o = s:taboption("DNS", ListValue, "up_trust_doh_dns", translate("Resolver For The List Proxied"))
-o:value("tcp", translatef("Requery DNS By %s", translate("TCP Node")))
-o:value("socks", translatef("Requery DNS By %s", translate("Socks Node")))
-o:depends("dns_mode", "https-dns-proxy")
 
 o = s:taboption("DNS", Value, "socks_server", translate("Socks Server"), translate("Make sure socks service is available on this address."))
 for k, v in pairs(socks_table) do o:value(v.id, v.remarks) end
+o.default = socks_table[1].id
 o.validate = function(self, value, t)
     if not datatypes.ipaddrport(value) then
         return nil, translate("Socks Server") .. " " .. translate("Not valid IP format, please re-enter!")
@@ -217,111 +228,146 @@ o.validate = function(self, value, t)
     return value
 end
 o:depends({dns_mode = "dns2socks"})
-o:depends({dns_mode = "https-dns-proxy", up_trust_doh_dns = "socks"})
-
----- DoH
-o = s:taboption("DNS", Value, "up_trust_doh", translate("DoH request address"))
-o:value("https://dns.adguard.com/dns-query,176.103.130.130,176.103.130.131", "AdGuard")
-o:value("https://cloudflare-dns.com/dns-query,1.1.1.1,1.0.0.1", "Cloudflare")
-o:value("https://security.cloudflare-dns.com/dns-query,1.1.1.2,1.0.0.2", "Cloudflare-Security")
-o:value("https://doh.opendns.com/dns-query,208.67.222.222,208.67.220.220", "OpenDNS")
-o:value("https://dns.google/dns-query,8.8.8.8,8.8.4.4", "Google")
-o:value("https://doh.libredns.gr/dns-query,116.202.176.26", "LibreDNS")
-o:value("https://doh.libredns.gr/ads,116.202.176.26", "LibreDNS (No Ads)")
-o:value("https://dns.quad9.net/dns-query,9.9.9.9,149.112.112.112", "Quad9-Recommended")
-o.default = "https://dns.google/dns-query,8.8.8.8,8.8.4.4"
-o.validate = doh_validate
-o:depends({dns_mode = "https-dns-proxy"})
 
 ---- DNS Forward
-o = s:taboption("DNS", Value, "dns_forward", translate("Filtered DNS(For Proxied Domains)"), translate("IP:Port mode acceptable, the 1st for 'dns2socks' if split with english comma."))
-o.default = "8.8.4.4"
-o:value("8.8.4.4", "8.8.4.4 (Google DNS)")
-o:value("8.8.8.8", "8.8.8.8 (Google DNS)")
-o:value("208.67.222.222", "208.67.222.222 (Open DNS)")
-o:value("208.67.220.220", "208.67.220.220 (Open DNS)")
+o = s:taboption("DNS", Value, "remote_dns", translate("Remote DNS"))
+o.datatype = "or(ipaddr,ipaddrport)"
+o.default = "1.1.1.1"
+o:value("1.1.1.1", "1.1.1.1 (CloudFlare)")
+o:value("1.1.1.2", "1.1.1.2 (CloudFlare-Security)")
+o:value("8.8.4.4", "8.8.4.4 (Google)")
+o:value("8.8.8.8", "8.8.8.8 (Google)")
+o:value("9.9.9.9", "9.9.9.9 (Quad9-Recommended)")
+o:value("208.67.220.220", "208.67.220.220 (OpenDNS)")
+o:value("208.67.222.222", "208.67.222.222 (OpenDNS)")
 o:depends({dns_mode = "dns2socks"})
-o:depends({dns_mode = "pdnsd"})
+o:depends({dns_mode = "dns2tcp"})
 o:depends({dns_mode = "udp"})
+o:depends({v2ray_dns_mode = "tcp"})
 
---[[
+---- DoH
+o = s:taboption("DNS", Value, "remote_dns_doh", translate("Remote DNS DoH"))
+o.default = "https://1.1.1.1/dns-query"
+o:value("https://1.1.1.1/dns-query", "CloudFlare")
+o:value("https://1.1.1.2/dns-query", "CloudFlare-Security")
+o:value("https://8.8.4.4/dns-query", "Google 8844")
+o:value("https://8.8.8.8/dns-query", "Google 8888")
+o:value("https://9.9.9.9/dns-query", "Quad9-Recommended")
+o:value("https://208.67.222.222/dns-query", "OpenDNS")
+o:value("https://dns.adguard.com/dns-query,176.103.130.130", "AdGuard")
+o:value("https://doh.libredns.gr/dns-query,116.202.176.26", "LibreDNS")
+o:value("https://doh.libredns.gr/ads,116.202.176.26", "LibreDNS (No Ads)")
+o.validate = doh_validate
+o:depends("v2ray_dns_mode", "doh")
+
+o = s:taboption("DNS", Value, "dns_client_ip", translate("EDNS Client Subnet"))
+o.description = translate("Notify the DNS server when the DNS query is notified, the location of the client (cannot be a private IP address).") .. "<br />" ..
+                translate("This feature requires the DNS server to support the Edns Client Subnet (RFC7871).")
+o.datatype = "ipaddr"
+o:depends("v2ray_dns_mode", "tcp")
+o:depends("v2ray_dns_mode", "doh")
+
 o = s:taboption("DNS", Flag, "dns_cache", translate("Cache Resolved"))
 o.default = "1"
 o:depends({dns_mode = "dns2socks"})
-o:depends({dns_mode = "pdnsd"})
-]]--
+o:depends({dns_mode = "xray", v2ray_dns_mode = "tcp"})
+o:depends({dns_mode = "xray", v2ray_dns_mode = "doh"})
+o.rmempty = false
 
-o = s:taboption("DNS", Flag, "use_chnlist", translate("Use ChinaList"), translate("Only useful in non-gfwlist mode.") .. "<br />" .. translate("When used, the domestic DNS will be used only when the chnlist rule is hit, and the domain name that misses the rule will be resolved by remote DNS."))
-o.default = "0"
+if has_chnlist and api.is_finded("chinadns-ng") then
+    o = s:taboption("DNS", Flag, "chinadns_ng", translate("ChinaDNS-NG"), translate("The effect is better, but will increase the memory."))
+    o.default = "0"
+	o:depends({dns_mode = "dns2socks"})
+	o:depends({dns_mode = "dns2tcp"})
+	o:depends({dns_mode = "xray", v2ray_dns_mode = "tcp"})
+	o:depends({dns_mode = "xray", v2ray_dns_mode = "doh"})
+	o:depends({dns_mode = "udp"})
+end
 
 o = s:taboption("DNS", Button, "clear_ipset", translate("Clear IPSET"), translate("Try this feature if the rule modification does not take effect."))
 o.inputstyle = "remove"
 function o.write(e, e)
-    luci.sys.call("/etc/init.d/" .. appname .. " stop && /usr/share/" .. appname .. "/iptables.sh flush_ipset && /etc/init.d/" .. appname .. " restart")
+    luci.sys.call("[ -n \"$(nft list sets 2>/dev/null | grep \"gfwlist\")\" ] && /usr/share/" .. appname .. "/nftables.sh flush_nftset || /usr/share/" .. appname .. "/iptables.sh flush_ipset > /dev/null 2>&1 &")
+    luci.http.redirect(api.url("log"))
 end
 
 s:tab("Proxy", translate("Mode"))
 
 ---- TCP Default Proxy Mode
-o = s:taboption("Proxy", ListValue, "tcp_proxy_mode", "TCP" .. translate("Default") .. translate("Proxy Mode"))
--- o.description = translate("If not available, try clearing the cache.")
-o.default = "chnroute"
-o.rmempty = false
-o:value("disable", translate("No Proxy"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Not China List"))
-o:value("returnhome", translate("China List"))
+tcp_proxy_mode = s:taboption("Proxy", ListValue, "tcp_proxy_mode", "TCP " .. translate("Default Proxy Mode"))
+tcp_proxy_mode:value("disable", translate("No Proxy"))
+tcp_proxy_mode:value("global", translate("Global Proxy"))
+tcp_proxy_mode:value("gfwlist", translate("GFW List"))
+tcp_proxy_mode:value("chnroute", translate("Not China List"))
+if has_chnlist then
+    tcp_proxy_mode:value("returnhome", translate("China List"))
+end
+tcp_proxy_mode:value("direct/proxy", translate("Only use direct/proxy list"))
+tcp_proxy_mode.default = "chnroute"
+--tcp_proxy_mode.validate = redir_mode_validate
 
 ---- UDP Default Proxy Mode
-o = s:taboption("Proxy", ListValue, "udp_proxy_mode", "UDP" .. translate("Default") .. translate("Proxy Mode"))
-o.default = "chnroute"
-o.rmempty = false
-o:value("disable", translate("No Proxy"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Game Mode"))
-o:value("returnhome", translate("China List"))
+udp_proxy_mode = s:taboption("Proxy", ListValue, "udp_proxy_mode", "UDP " .. translate("Default Proxy Mode"))
+udp_proxy_mode:value("disable", translate("No Proxy"))
+udp_proxy_mode:value("global", translate("Global Proxy"))
+udp_proxy_mode:value("gfwlist", translate("GFW List"))
+udp_proxy_mode:value("chnroute", translate("Not China List"))
+if has_chnlist then
+    udp_proxy_mode:value("returnhome", translate("China List"))
+end
+udp_proxy_mode:value("direct/proxy", translate("Only use direct/proxy list"))
+udp_proxy_mode.default = "chnroute"
+--udp_proxy_mode.validate = redir_mode_validate
 
 ---- Localhost TCP Proxy Mode
-o = s:taboption("Proxy", ListValue, "localhost_tcp_proxy_mode", translate("Router Localhost") .. "TCP" .. translate("Proxy Mode"))
--- o.description = translate("The server client can also use this rule to scientifically surf the Internet.")
-o:value("default", translate("Default"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Not China List"))
-o:value("returnhome", translate("China List"))
-o.default = "default"
-o.rmempty = false
+localhost_tcp_proxy_mode = s:taboption("Proxy", ListValue, "localhost_tcp_proxy_mode", translate("Router Localhost") .. " TCP " .. translate("Proxy Mode"))
+localhost_tcp_proxy_mode:value("default", translatef("Same as the %s default proxy mode", "TCP"))
+localhost_tcp_proxy_mode:value("global", translate("Global Proxy"))
+localhost_tcp_proxy_mode:value("gfwlist", translate("GFW List"))
+localhost_tcp_proxy_mode:value("chnroute", translate("Not China List"))
+if has_chnlist then
+    localhost_tcp_proxy_mode:value("returnhome", translate("China List"))
+end
+localhost_tcp_proxy_mode:value("disable", translate("No Proxy"))
+localhost_tcp_proxy_mode:value("direct/proxy", translate("Only use direct/proxy list"))
+localhost_tcp_proxy_mode.default = "default"
+--localhost_tcp_proxy_mode.validate = redir_mode_validate
 
 ---- Localhost UDP Proxy Mode
-o = s:taboption("Proxy", ListValue, "localhost_udp_proxy_mode", translate("Router Localhost") .. "UDP" .. translate("Proxy Mode"))
-o:value("default", translate("Default"))
-o:value("global", translate("Global Proxy"))
-o:value("gfwlist", translate("GFW List"))
-o:value("chnroute", translate("Game Mode"))
-o:value("returnhome", translate("China List"))
-o:value("disable", translate("No Proxy"))
-o.default = "default"
-o.rmempty = false
+localhost_udp_proxy_mode = s:taboption("Proxy", ListValue, "localhost_udp_proxy_mode", translate("Router Localhost") .. " UDP " .. translate("Proxy Mode"))
+localhost_udp_proxy_mode:value("default", translatef("Same as the %s default proxy mode", "UDP"))
+localhost_udp_proxy_mode:value("global", translate("Global Proxy"))
+localhost_udp_proxy_mode:value("gfwlist", translate("GFW List"))
+localhost_udp_proxy_mode:value("chnroute", translate("Not China List"))
+if has_chnlist then
+    localhost_udp_proxy_mode:value("returnhome", translate("China List"))
+end
+localhost_udp_proxy_mode:value("disable", translate("No Proxy"))
+localhost_udp_proxy_mode:value("direct/proxy", translate("Only use direct/proxy list"))
+localhost_udp_proxy_mode.default = "default"
+localhost_udp_proxy_mode.validate = redir_mode_validate
+
+tips = s:taboption("Proxy", DummyValue, "tips", " ")
+tips.rawhtml = true
+tips.cfgvalue = function(t, n)
+    return string.format('<a style="color: red" href="%s">%s</a>', api.url("acl"), translate("Want different devices to use different proxy modes/ports/nodes? Please use access control."))
+end
 
 s:tab("log", translate("Log"))
-for i = 1, tcp_node_num, 1 do
-    o = s:taboption("log", Flag, "close_log_tcp_" .. i , translate("Close") .. translate("Log") .. " " .. translate("TCP Node") .. " " .. i)
-    o.rmempty = false
-end
-for i = 1, udp_node_num, 1 do
-    o = s:taboption("log", Flag, "close_log_udp_" .. i, translate("Close") .. translate("Log") .. " " .. translate("UDP Node") .. " " .. i)
-    o.rmempty = false
-end
-loglevel = s:taboption("log", ListValue, "loglevel", "X/V2ray" .. translate("Log Level"))
+o = s:taboption("log", Flag, "close_log_tcp", translatef("%s Node Log Close", "TCP"))
+o.rmempty = false
+
+o = s:taboption("log", Flag, "close_log_udp", translatef("%s Node Log Close", "UDP"))
+o.rmempty = false
+
+loglevel = s:taboption("log", ListValue, "loglevel", "V2ray/Xray " .. translate("Log Level"))
 loglevel.default = "warning"
 loglevel:value("debug")
 loglevel:value("info")
 loglevel:value("warning")
 loglevel:value("error")
 
-trojan_loglevel = s:taboption("log", ListValue, "trojan_loglevel", "Trojan" ..  translate("Log Level"))
+trojan_loglevel = s:taboption("log", ListValue, "trojan_loglevel", "Trojan " ..  translate("Log Level"))
 trojan_loglevel.default = "2"
 trojan_loglevel:value("0", "all")
 trojan_loglevel:value("1", "info")
@@ -329,12 +375,15 @@ trojan_loglevel:value("2", "warn")
 trojan_loglevel:value("3", "error")
 trojan_loglevel:value("4", "fatal")
 
-s:tab("tips", translate("Tips"))
+s:tab("faq", "FAQ")
 
-o = s:taboption("tips", DummyValue, "")
-o.template = appname .. "/global/tips"
+o = s:taboption("faq", DummyValue, "")
+o.template = appname .. "/global/faq"
 
 -- [[ Socks Server ]]--
+o = s:taboption("Main", Flag, "socks_enabled", "Socks " .. translate("Main switch"))
+o.rmempty = false
+
 s = m:section(TypedSection, "socks", translate("Socks Config"))
 s.anonymous = true
 s.addremove = true
@@ -354,31 +403,40 @@ o = s:option(Flag, "enabled", translate("Enable"))
 o.default = 1
 o.rmempty = false
 
-o = s:option(ListValue, "node", translate("Socks Node"))
-local tcp_node_num = tonumber(m:get("@global_other[0]", "tcp_node_num") or 1)
-for i = 1, tcp_node_num, 1 do
-    o:value("tcp" .. i, translatef("Same as the tcp %s node", i))
-end
-for k, v in pairs(nodes_table) do o:value(v.id, v.remarks) end
+socks_node = s:option(ListValue, "node", translate("Socks Node"))
 
-o = s:option(Value, "port", "Socks" .. translate("Listen Port"))
-o.default = 9050
+local n = 1
+uci:foreach(appname, "socks", function(s)
+    if s[".name"] == section then
+        return false
+    end
+    n = n + 1
+end)
+
+o = s:option(Value, "port", "Socks " .. translate("Listen Port"))
+o.default = n + 1080
 o.datatype = "port"
 o.rmempty = false
 
-if api.is_finded("xray") or api.is_finded("v2ray") then
-    o = s:option(Value, "http_port", "HTTP" .. translate("Listen Port") .. " " .. translate("0 is not use"))
+if has_v2ray or has_xray then
+    o = s:option(Value, "http_port", "HTTP " .. translate("Listen Port") .. " " .. translate("0 is not use"))
     o.default = 0
     o.datatype = "port"
 end
 
-m:append(Template(appname .. "/global/footer"))
-
---[[
-local apply = luci.http.formvalue("cbi.apply")
-if apply then
-os.execute("/etc/init.d/" .. appname .." restart")
+for k, v in pairs(nodes_table) do
+    tcp_node:value(v.id, v["remark"])
+    udp_node:value(v.id, v["remark"])
+    if v.type == "Socks" then
+        if has_v2ray or has_xray then
+            socks_node:value(v.id, v["remark"])
+        end
+    else
+        socks_node:value(v.id, v["remark"])
+    end
 end
---]]
+
+m:append(Template(appname .. "/global/status_bottom"))
+m:append(Template(appname .. "/global/footer"))
 
 return m

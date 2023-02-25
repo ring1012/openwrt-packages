@@ -1,5 +1,5 @@
 #!/bin/sh /etc/rc.common
-START=90
+START=93
 
 run_mentohust()
 {
@@ -73,7 +73,7 @@ start()
 
 stop()
 {
-    killall mentohust
+    killall -q `which mentohust`
 }
 
 restart()

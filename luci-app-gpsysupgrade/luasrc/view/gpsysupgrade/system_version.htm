@@ -1,5 +1,5 @@
 <%
-local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_system_version()
+local system_version = require "luci.model.cbi.gpsysupgrade.sysupgrade".get_system_version()
 -%>
 <%+header%>
 <h2 name="content"><%:System upgrade%></h2>
@@ -97,7 +97,11 @@ local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_
 					if(ckeckDetailElm) {
 						var urlNode = '';
 						if(json.version) {
-							urlNode = '<em style="color:red;">最新版本号：' + json.version + '</em>';
+							if(json.notice) {
+								urlNode = '<em style="color:red;">最新版本号：' + json.version + ' &nbsp;正式版</em>';
+							} else {
+								urlNode = '<em style="color:red;">最新版本号：' + json.version + ' &nbsp;尝鲜版</em>';
+							}
 						}
 						if(json.logs) {
 							logs = '<div class="alert alert-message">' + json.logs + '</div>';
@@ -126,7 +130,8 @@ local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_
 		// Download file
 		XHR.get(sysUpgradeUrl, {
 			token: tokenStr,
-			url: sysUpgradeInfo ? sysUpgradeInfo.url : ''
+			url: sysUpgradeInfo ? sysUpgradeInfo.url : '',
+			md5: sysUpgradeInfo ? sysUpgradeInfo.md5 : ''
 		}, function(x,json) {
 			if(json.code) {
 				removePageNotice_sysup();
@@ -147,15 +152,14 @@ local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_
 		if (!kconfig.checked && kopkg.checked){
 			opts = "-n -k";
 			}
-				removePageNotice_sysup();
-				check();
+			removePageNotice_sysup();
+			setTimeout(check, 8000);
 						XHR.get(sysUpgradeUrl, {
 							token: tokenStr,
 							task: 'flash',
 							file: json.file,
 							retain: opts
 						}, function(x,json) {
-							
 						},300)
 			}
 		},300)
@@ -173,7 +177,33 @@ local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_
 			<span>【 <%=system_version%> 】</span>
 		&nbsp;&nbsp;&nbsp;<span id="_sysup-check_btn-detail"></span>
 		</div>
-	<div id="updatelogs"></div>
+<style>
+#updatelogs .alert-message p{
+	text-align:left;
+	}
+#updatelogs .alert-message a{
+    color: orangered;
+text-decoration: underline;
+}
+.red{
+    color: orangered;
+}
+#updatelogs h4{
+padding-bottom:0;
+	}
+#updatelogs h4.title{
+font-size:130%
+	}
+</style>
+<%
+local boardinfo = luci.util.ubus("system", "board") or { }
+overlay = boardinfo.release.distribution
+%>
+<%- if overlay ~="OpenWrt" and overlay ~= "1004" then -%>
+	<b style="color:orangered">注意: 修改过根目录大小的定制固件请使用<a target="_blank" href="https://supes.top"> 网站 </a>或安装luci-app-attendedsysupgrade重新生成定制固件, 直接用此在线更新会重置分区,丢失配置.</b>
+<%- end -%>
+
+	<pre id="updatelogs" style="font-family:Microsoft Yahei;line-height:1.5rem;white-space:pre-line;"></div>
 <div id="retain" style="display:none;margin:0.5rem;">
 	<p style="margin-top:0.4rem;"><button class="btn"><input type="checkbox" checked id="kconfig"> <%:Keep settings and retain the current configuration%></button></p>
 <p style="margin-top:0.5rem;"><button class="btn"><input type="checkbox" checked id="kopkg"> <%:Retain the current packages%></button></p>
@@ -198,7 +228,7 @@ local system_version = require "luci.model.cbi.gpsysupgrade.api.sysupgrade".get_
 	}
 
 	function check() {
-		window.setTimeout(ping, 5000);
+		window.setTimeout(ping, 3000);
 	}
 
 	function ping() {

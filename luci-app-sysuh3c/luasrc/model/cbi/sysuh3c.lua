@@ -41,16 +41,16 @@ end
 getwanif = s:option(Button, "_getwanif", translate("Get WAN interface"))
 getwanif.inputstyle = "apply"
 getwanif.write = function(self, section)
-	local ifname = sys.exec("uci get network.wan.ifname")
+	local ifname = sys.exec("uci get network.wan.device")
 	if ifname ~= nil then
 		self.map:set(section, "ifname", ifname)
 	end
 end
 ]]--
---[[
+
 local apply = luci.http.formvalue("cbi.apply")
 if apply then
 	io.popen("/etc/init.d/sysuh3c restart")
 end
-]]--
+
 return m

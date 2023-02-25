@@ -6,14 +6,9 @@
 include $(TOPDIR)/rules.mk
 
 LUCI_TITLE:=LuCI support for Amule
-LUCI_DEPENDS:=+amule +antileech
+LUCI_DEPENDS:=+amule
 LUCI_PKGARCH:=all
-
-define Package/luci-app-amule/conffiles
-	/etc/config/amule
-endef
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
 # call BuildPackage - OpenWrt buildroot signature
-

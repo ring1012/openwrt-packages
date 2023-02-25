@@ -4,7 +4,7 @@ local appname = "gpsysupgrade"
 local ucic = luci.model.uci.cursor()
 local http = require "luci.http"
 local util = require "luci.util"
-local sysupgrade = require "luci.model.cbi.gpsysupgrade.api.sysupgrade"
+local sysupgrade = require "luci.model.cbi.gpsysupgrade.sysupgrade"
 
 function index()
 	appname = "gpsysupgrade"
@@ -31,7 +31,7 @@ function sysversion_update()
 	if task == "flash" then
 		json = sysupgrade.to_flash(http.formvalue("file"),http.formvalue("retain"))
 	else
-		json = sysupgrade.to_download(http.formvalue("url"))
+		json = sysupgrade.to_download(http.formvalue("url"),http.formvalue("md5"))
 	end
 
 	http_write_json(json)
